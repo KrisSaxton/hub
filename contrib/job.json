@@ -1,0 +1,1 @@
+{"output": ["_multiply.data"], "tasks": [{"args": [1, 2], "name": "add"}, {"depends": ["add"], "args": ["_add.data", 2], "name": "multiply"}], "name": "addsum"}
