@@ -29,7 +29,7 @@ class Client(object):
         '''Takes a job as python dict and posts as json object.'''
         self.response = None
         self.corr_id = str(uuid.uuid4())
-        print 'Submitting request for job with id %s' % jobid
+        print 'Submitting status request for job with id %s' % jobid
         self.channel.basic_publish(exchange='',
                          routing_key='hub_status',
                          properties=pika.BasicProperties(
@@ -38,7 +38,6 @@ class Client(object):
                               correlation_id = self.corr_id,
                               ),
                          body=json.dumps(jobid))
-        print "Listening for response with id: %s " % self.corr_id
         while self.response is None:
             self.connection.process_data_events()
         return str(self.response)
@@ -47,4 +46,4 @@ if __name__ == '__main__':
     jobid = sys.argv[1]
     client = Client()
     response = client.post(jobid)
-    print 'Successfully retrieved job id %s: %s' % (jobid, response)
+    print response

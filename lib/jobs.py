@@ -8,14 +8,6 @@ from tasks import Task
 import pika
 import json
 
-#class JobState(State):
-#
-#    '''Class representing a job's state.  Essentially a dictionary which can be easily
-#       de/serialised for passing through the messaging network.'''
-#
-#    def __init__(self):
-#        super(JobState, self).__init__()
-
 class Job(Task):
 
     '''Superclass for all job objects. A job is a collection of tasks.'''
@@ -50,22 +42,23 @@ class Job(Task):
         self.state.tasks = task_list
         return self.state.save()
 
-    def get_status(self):
-        status = 'UNKNOWN'
+    def check_status(self):
+        statuses = []
         for task in self.state.tasks:
-            if task.state.status == 'FAILED':
-                self.state.status = 'FAILED'
-                # If at least one task has failed then the job has too
-                return self.state.status
-            elif task.state.status == 'PENDING' or task.state.status == 'RUNNING':
-                # At least one PENDING task and no failures gives a PENDING job status
-                status = 'PENDING'
-            elif task.state.status == 'SUCCESS':
-                # Initial success is recorded but is overwritten by other statuses
-                if status == 'UNKNOWN':
-                    status = 'SUCCESS'
-        self.state.status = status
-        return self.state.status
+            statuses.append(task.state.status)
+        if any(status == 'FAILED' for status in statuses):
+            return 'FAILED'
+        if any(status == 'RUNNING' for status in statuses):
+            return 'RUNNING'
+        if all(status == 'PENDING' for status in statuses):
+            return 'PENDING'
+        if all(status == 'SUCCESS' for status in statuses):
+            return 'SUCCESS'
+        return 'UNKNOWN'
+
+    def set_status(self):
+        self.state.status = self.check_status()
+        return self
         
     def get_tasks(self, task_name=None):
         '''Get task objects.'''
@@ -103,6 +96,7 @@ class Job(Task):
             if t.state.name == task.state.name:
                 print 'Updating task %s with new results' % t.state.name
                 self.state.tasks[i] = task
+        return self
 
     def update_task_args(self, task):
         '''Attempt update of parameterised task arguments.'''
@@ -124,6 +118,7 @@ class Job(Task):
                 source_task = self.get_tasks(task_name)
                 value = source_task.state.__getattr__(task_key)
                 self.state.output[i] = value
+        return self
 
     def post_result(self):
         '''Post job results somewhere?'''

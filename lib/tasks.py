@@ -7,14 +7,6 @@ from common import State
 import pika
 import json
 
-#class TaskState(State):
-#
-#    '''Class representing a task's state.  Essentially a dictionary which can be easily
-#       de/serialised for passing through the messaging network.'''
-#
-#    def __init__(self):
-#        super(TaskState, self).__init__()
-
 class Task(object):
 
     '''Superclass for all Task objects. Tasks are defined units of work.'''
