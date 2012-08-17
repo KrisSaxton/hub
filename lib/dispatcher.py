@@ -2,9 +2,9 @@
 # core modules
 import uuid
 # own modules
-import error
-from jobs import Job
-from tasks import Task
+import hub.lib.error
+from hub.lib.jobs import Job
+from hub.lib.tasks import Task
 # 3rd party modules
 import pika
 import json

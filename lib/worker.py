@@ -1,9 +1,8 @@
 #!/usr/bin/env python
-#core modules
+# core modules
 import os
 # own modules
-import error
-from tasks import Task
+from hub.lib import error
 # 3rd party modules
 import pika
 import json
@@ -14,7 +13,7 @@ class Worker():
     '''Class representing workers that process jobs.'''
     def __init__(self):
         '''Load all job plugins'''
-        plugin_dir = LIBDIR + '/hub/jobs' 
+        plugin_dir = LIBDIR + '/hub/tasks' 
         os.sys.path.append(plugin_dir)
         plugins = []
         # Scan the plugins directory for files ending in .py and import them
@@ -36,26 +35,27 @@ class Worker():
         '''Checks task name for matching module and class, 
         instanciates and calls run method with task args'''
         print "Received task: %r" % (taskrecord,)
-        task_dict = json.loads(taskrecord)
+        record = json.loads(taskrecord)
         for module in self.modules:
-            if module.__name__ == task_dict['name']:
+            if module.__name__ == record['name']:
                 args = []
                 kwargs = {}
-                if 'args' in task_dict:
-                    args = task_dict['args']
+                if 'args' in record:
+                    args = record['args']
                 task = getattr(module, module.__name__).load(taskrecord)
                 print 'Running task: %s' % task.state.name
-                taskdata = Task().load(taskrecord)
                 try:
-                    taskdata.state.data = task(*args, **kwargs)
+                    task.state.data = task(*args, **kwargs)
+                    #task(*args, **kwargs)
                     if task.async:
-                        taskdata.state.status = 'RUNNING'
+                        task.state.status = 'RUNNING'
                     else:
-                        taskdata.state.status = 'SUCCESS'
-                except:
-                    taskdata.state.status = 'FAILED'
-                    raise
-                self.post_result(taskdata)
+                        task.state.status = 'SUCCESS'
+                except Exception, e:
+                    task.state.status = 'FAILED'
+                    task.state.msg = str(e)
+                finally:
+                    self.post_result(task)
 
     def post_result(self, task):
         '''Post task results into the results queue.'''

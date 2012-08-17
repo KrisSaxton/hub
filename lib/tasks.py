@@ -1,5 +1,8 @@
 # Core modules
+import os
 import uuid
+import subprocess
+from tempfile import NamedTemporaryFile
 # Own modules
 import error
 from common import State
@@ -18,23 +21,15 @@ class Task(object):
         if parent_id is not None:
             self.state.parent_id = parent_id
         self.async = async
-        self._set_id()
+        if not self.state.id:
+            self.state.id = uuid.uuid1().__str__()
+        if not self.state.status:
+            self.state.status = 'PENDING'
 
     def _validate(self):
         '''Ensure task is in a valid format.'''
         if not self.name:
             raise error.ValidationError('Invalid task format')
-
-    def _set_id(self):
-        '''Generate a job id. uuid1 includes a hardware address component
-        so will be unique across dispatchers.'''
-        if not self.state.id:
-            self.state.id = uuid.uuid1().__str__()
-        return self # Do I need that?
-
-    def _set_parent_id(self, parent_id):
-        self.state.parent_id = parent_id
-        return self
 
     def load(self, taskrecord):
         self.state.load(taskrecord)
@@ -52,6 +47,24 @@ class Task(object):
 
     def run(self):
         raise error.MethodNotImplemented('All tasks must implement the run method')
+
+    def extrun(self, cmd, ser='json'):
+        '''Run external commands via json request/reply objects.'''
+        request_file = NamedTemporaryFile(delete=False)
+        reply_file = NamedTemporaryFile(delete=False)
+        request_file.write(self.state.save())
+        request_file.close()
+        print 'Running external command %s %s %s' % \
+            (cmd, request_file.name, reply_file.name)
+        subprocess.check_call([cmd, request_file.name, reply_file.name])
+        reply = open(reply_file.name)
+        replydata = json.load(reply)
+        reply.close()
+        return replydata
+
+        #os.unlink(request_file)
+        #os.unlink(reply_file)
+        
 
     def post_result(self):
         '''Post task results into the results queue.'''
