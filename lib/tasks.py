@@ -9,12 +9,15 @@ from common import State
 # 3rd part modules
 import pika
 import json
+import hub.lib.config as config
 
 class Task(object):
 
     '''Superclass for all Task objects. Tasks are defined units of work.'''
 
     def __init__(self, state=None, parent_id=None, async=False):
+        self.conf = config.setup('/usr/local/pkg/hub/etc/hub.conf')
+        self.broker = self.conf.get('HUB', 'broker')
         if not state:
             state = State()
         self.state = state
@@ -68,7 +71,7 @@ class Task(object):
 
     def post_result(self):
         '''Post task results into the results queue.'''
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host='ks-test-02'))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.broker))
         channel = connection.channel()
         print 'Sending results to dispatcher with id: %s' % self.state.parent_id
         print self._state

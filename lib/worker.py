@@ -2,18 +2,28 @@
 # core modules
 import os
 # own modules
-from hub.lib import error
+import hub.lib.config as config
+import hub.lib.error as error
 # 3rd party modules
 import pika
 import json
 
-LIBDIR = '/usr/local/share/plugins'
+config_file = '/usr/local/pkg/hub/etc/hub.conf'
+
+try:
+    conf = config.setup(config_file)
+except error.ConfigError, e:
+    print e.msg
+    raise e
 
 class Worker():
     '''Class representing workers that process jobs.'''
     def __init__(self):
         '''Load all job plugins'''
-        plugin_dir = LIBDIR + '/hub/tasks' 
+        self.conf = config.setup()
+        self.broker = conf.get('HUB', 'broker')
+        self.libdir = conf.get('HUB', 'libdir')
+        plugin_dir = self.libdir + '/hub/tasks' 
         os.sys.path.append(plugin_dir)
         plugins = []
         # Scan the plugins directory for files ending in .py and import them
@@ -24,7 +34,7 @@ class Worker():
         self.modules = map(__import__, plugins) # Could load plugins as they are called with imp?
         
         # Setup connection to broker and declare the work queue
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host='ks-test-02'))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.broker))
         channel = connection.channel()
         channel.queue_declare(queue='hub_run')
         channel.basic_consume(self.run, queue='hub_run', no_ack=True)
@@ -45,7 +55,7 @@ class Worker():
                 task = getattr(module, module.__name__).load(taskrecord)
                 print 'Running task: %s' % task.state.name
                 try:
-                    task.state.data = task(*args, **kwargs)
+                    task.state.data = task(*args, **kwargs)                  
                     #task(*args, **kwargs)
                     if task.async:
                         task.state.status = 'RUNNING'
@@ -59,7 +69,7 @@ class Worker():
 
     def post_result(self, task):
         '''Post task results into the results queue.'''
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host='ks-test-02'))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.broker))
         channel = connection.channel()
         print 'Sending task results to dispatcher with job id: %s' % task.state.parent_id
         print task.state

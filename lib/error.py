@@ -9,13 +9,20 @@ class HubError(Exception):
     '''Base class for exceptions in this application'''
     def __init__(self, msg, traceback=None):
         Exception.__init__(self, msg)
-        self.exit_code = self._set_exit_code()
+        self.exit_code = 1
         self.msg = msg
         self.info = 'for more information on Hub errors: visit http://<tbc>/'
         self.traceback = traceback
 
-    def _set_exit_code(self):
-        return 1
+
+class InputError(HubError):
+    def __init__(self, msg):
+        self.exit_code = 2
+        self.msg = msg
+
+class ConfigError(InputError):
+    def __init__(self, msg):
+        self.msg = msg
 
 class MethodNotImplemented(HubError):
     '''Raised on missing essential method in subclass.'''
