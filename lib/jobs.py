@@ -116,6 +116,7 @@ class Job(Task):
                 print 'Found parametrised var %s in job %s' % (var, self.state.name)
                 task_name, task_key = var.lstrip('_').split('.')
                 source_task = self.get_tasks(task_name)
+                #Would be good to check this exists, catch error MMB
                 value = source_task.state.__getattr__(task_key)
                 self.state.output[i] = value
         return self

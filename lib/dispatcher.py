@@ -2,21 +2,30 @@
 # core modules
 import uuid
 # own modules
-import hub.lib.error
+import hub.lib.error as error
 from hub.lib.jobs import Job
 from hub.lib.tasks import Task
 # 3rd party modules
 import pika
 import json
+import hub.lib.config as config
 
-BROKER='ks-test-02'
+config_file = '/usr/local/pkg/hub/etc/hub.conf'
 
+try:
+    conf = config.setup(config_file)
+except error.ConfigError, e:
+    print e.msg
+    raise e
+    
 class Dispatcher():
     '''Class representing dispatchers that send jobs to workers.'''
     def __init__(self):
         '''Setup connection to broker; listen for incoming jobs and results.'''
+        self.conf = config.setup()
+        self.broker = conf.get('HUB', 'broker')
         self.registered_jobs = {}
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=BROKER))
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.broker))
         self.channel = self.connection.channel()
         self.channel.queue_declare(queue='hub_jobs')
         self.channel.queue_declare(queue='hub_results')

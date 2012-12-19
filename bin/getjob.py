@@ -3,16 +3,25 @@ import sys
 import pika
 import json
 import uuid
+import hub.lib.config as config
 
-BROKER='ks-test-02'
+config_file = '/usr/local/pkg/hub/etc/hub.conf'
+
+try:
+    conf = config.setup(config_file)
+except error.ConfigError, e:
+    print e.msg
+    raise e
 
 class Client(object):
 
     '''Class representing things that can get jobs.'''
 
     def __init__(self):
+        self.conf = config.setup()
+        self.broker = conf.get('HUB', 'broker')
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(
-            host=BROKER))
+            host=self.broker))
         self.channel = self.connection.channel()
         result = self.channel.queue_declare(exclusive=True)
         self.callback_queue = result.method.queue
