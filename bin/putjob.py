@@ -12,3 +12,5 @@ if __name__ == '__main__':
         client = Client(config_file)
         response = client.post_wait(None, 'create', job=job)
         print 'Successfully submitted job with job id: %s' % response
+        print 'And body:'
+        print job
