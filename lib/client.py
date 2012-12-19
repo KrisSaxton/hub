@@ -66,12 +66,14 @@ class Client(object):
         if request_type is 'create':
             self.routing_key='hub_jobs'
             self.body = job
+            return "Please use post_wait"
         elif request_type is 'update':
             self.routing_key='hub_results'
             self.body = json.dumps(taskdata)
         else:
             self.routing_key='hub_status'
             self.body = json.dumps(jobid)
+            return "please use post_wait"
             
         self.response = None
         self.corr_id = str(uuid.uuid4())
@@ -81,7 +83,7 @@ class Client(object):
                          properties=pika.BasicProperties(
                               content_type='application/json',
                               reply_to = self.callback_queue,
-                              correlation_id = self.corr_id,
+                              correlation_id = str(jobid),
                               ),
                          body=self.body)
         return str(self.response)
