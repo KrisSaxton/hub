@@ -20,5 +20,6 @@ def get_uuid():
     uuid_results = client.cmd(ldap, 'host.uuid_reserve', ['get_mac=False'])
     uuid = uuid_results[ldap]['data'][0][0]
     mac = uuid_results[ldap]['data'][1][0]
-    return {'uuid':uuid, 'mac':mac}
+    hostname = orgname + '-' + str(uuid)
+    return {'uuid':uuid, 'mac':mac, 'hostname':hostname}
     #return uuid
