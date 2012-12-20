@@ -32,6 +32,35 @@ class Client(object):
         if self.corr_id == properties.correlation_id:
             self.response = body    
 
+    def _post(self, jobid, request_type, blocking=True, taskdata=None, job=None):
+        '''Takes a job as python dict and posts as json object.'''
+        #Are we doing create, update, get?        
+        if request_type is 'create':
+            self.routing_key='hub_jobs'
+            self.body = job
+        elif request_type is 'update':
+            self.routing_key='hub_results'
+            self.body = json.dumps(taskdata)
+        else:
+            self.routing_key='hub_status'
+            self.body = json.dumps(jobid)
+                        
+        self.response = None
+        self.corr_id = str(uuid.uuid4())
+        print 'Submitting request for job with id %s' % jobid
+        self.channel.basic_publish(exchange='',
+                         routing_key=self.routing_key,
+                         properties=pika.BasicProperties(
+                              content_type='application/json',
+                              reply_to = self.callback_queue,
+                              correlation_id = self.corr_id,
+                              ),
+                         body=self.body)
+        while self.response is None:
+            self.connection.process_data_events()
+        return str(self.response)
+    
+    
     def post_wait(self, jobid, request_type, taskdata=None, job=None):
         '''Takes a job as python dict and posts as json object.'''
         #Are we doing create, update, get?        
