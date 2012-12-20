@@ -33,7 +33,7 @@ class Client(object):
             self.response = body    
 
     def _post(self, jobid, request_type, blocking=True, taskdata=None, job=None):
-        '''Takes a job as python dict and posts as json object.'''
+        '''Used by create get update to send request to middleware'''
         #Are we doing create, update, get?        
         if request_type is 'create':
             self.routing_key='hub_jobs'
@@ -44,9 +44,11 @@ class Client(object):
         else:
             self.routing_key='hub_status'
             self.body = json.dumps(jobid)
-                        
         self.response = None
-        self.corr_id = str(uuid.uuid4())
+        if request_type is 'update':
+            self.corr_id = str(jobid)
+        else:
+            self.corr_id = str(uuid.uuid4())
         print 'Submitting request for job with id %s' % jobid
         self.channel.basic_publish(exchange='',
                          routing_key=self.routing_key,
@@ -56,63 +58,23 @@ class Client(object):
                               correlation_id = self.corr_id,
                               ),
                          body=self.body)
-        while self.response is None:
-            self.connection.process_data_events()
+        if blocking is True:
+            while self.response is None:
+                self.connection.process_data_events()
         return str(self.response)
     
+
+    def create(self, job):
+        '''Posts a new job'''
+        res = self._post(None, 'create', blocking=True, job=job)
+        return res
+
+    def update(self, jobid, taskdata):
+        '''Update a job'''
+        res = self._post(jobid, 'update', blocking=False, taskdata=taskdata)
+        return res
     
-    def post_wait(self, jobid, request_type, taskdata=None, job=None):
-        '''Takes a job as python dict and posts as json object.'''
-        #Are we doing create, update, get?        
-        if request_type is 'create':
-            self.routing_key='hub_jobs'
-            self.body = job
-        elif request_type is 'update':
-            self.routing_key='hub_results'
-            self.body = json.dumps(taskdata)
-        else:
-            self.routing_key='hub_status'
-            self.body = json.dumps(jobid)
-                        
-        self.response = None
-        self.corr_id = str(uuid.uuid4())
-        print 'Submitting request for job with id %s' % jobid
-        self.channel.basic_publish(exchange='',
-                         routing_key=self.routing_key,
-                         properties=pika.BasicProperties(
-                              content_type='application/json',
-                              reply_to = self.callback_queue,
-                              correlation_id = self.corr_id,
-                              ),
-                         body=self.body)
-        while self.response is None:
-            self.connection.process_data_events()
-        return str(self.response)
-    
-    def post(self, jobid, request_type, taskdata=None, job=None):
-        '''Takes a job as python dict and posts as json object.'''
-        #Are we doing create, update, get?        
-        if request_type is 'create':
-            self.routing_key='hub_jobs'
-            self.body = job
-            return "Please use post_wait"
-        elif request_type is 'update':
-            self.routing_key='hub_results'
-            self.body = json.dumps(taskdata)
-        else:
-            self.routing_key='hub_status'
-            self.body = json.dumps(jobid)
-            return "please use post_wait"
-            
-        self.response = None
-        self.corr_id = str(uuid.uuid4())
-        print 'Submitting request for job with id %s' % jobid
-        self.channel.basic_publish(exchange='',
-                         routing_key=self.routing_key,
-                         properties=pika.BasicProperties(
-                              content_type='application/json',
-                              reply_to = self.callback_queue,
-                              correlation_id = str(jobid),
-                              ),
-                         body=self.body)
-        return str(self.response)
+    def get(self, jobid):
+        '''Get status on a current job'''
+        res = self._post(jobid, 'get', blocking=True)
+        return res
