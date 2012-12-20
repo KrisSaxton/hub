@@ -11,8 +11,8 @@
 	    },
 	    {
 	        "depends": ["create_host"],
-	        "args": [30, "_salt_sleep.id", "_salt_sleep.parent_id"],
-	        "name": "salt_sleep"
+	        "args": ["_get_uuid.data"],
+	        "name": "create_lvm"
 	    }
 	       ],
     
