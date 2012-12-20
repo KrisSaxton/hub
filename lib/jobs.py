@@ -35,17 +35,16 @@ class Job(Task):
 
     def save(self):
         '''Save a job's state as a job record.'''
-        task_list = []
+        self.task_list = []
         if self.state.tasks:
             for task in self.state.tasks:
                 #This try block is neccessary because if we have already deserialised
                 #we get in a mess!
                 try:
-                    task_list.append(task.state.__str__())
+                    self.task_list.append(task.state.__str__())
                 except AttributeError:
-                    task_list = self.state.tasks
-        self.state.tasks = task_list
-        return self.state.save()
+                    pass
+        return json.dumps(self.task_list)
 
     def check_status(self):
         statuses = []
