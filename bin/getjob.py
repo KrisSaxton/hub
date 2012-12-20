@@ -9,5 +9,5 @@ from hub.lib.client import Client
 if __name__ == '__main__':
     jobid = sys.argv[1]
     client = Client(config_file)
-    response = client.post_wait(jobid, 'get')
+    response = client.get(jobid)
     print response
