@@ -1,0 +1,19 @@
+{"output": ["_salt_sleep.data"],
+
+ "tasks": [
+	    {
+	        "name": "get_uuid"
+	    },
+	    {
+	        "depends": ["get_uuid"],
+	        "args": ["_get_uuid.data"],
+	        "name": "create_host"
+	    },
+	    {
+	        "depends": ["create_host"],
+	        "args": [30, "_salt_sleep.id", "_salt_sleep.parent_id"],
+	        "name": "salt_sleep"
+	    }
+	       ],
+    
+ "name": "provision"}
