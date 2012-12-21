@@ -69,9 +69,9 @@ class Client(object):
         res = self._post(None, 'create', blocking=True, job=job)
         return res
 
-    def update(self, jobid, taskdata):
+    def update(self, taskdata):
         '''Update a job'''
-        res = self._post(jobid, 'update', blocking=False, taskdata=taskdata)
+        res = self._post('update_task', 'update', blocking=False, taskdata=taskdata)
         return res
     
     def get(self, jobid):
