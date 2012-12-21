@@ -79,6 +79,9 @@ class Dispatcher():
         print 'Received job: %s' % job.state
         print 'Decomposing job; calculating first tasks to run'
         tasks_to_run = job.get_next_tasks_to_run()
+        #This was added to fill out any id args in tasks right at the beginning
+        for task in tasks_to_run:
+            task = job.update_task_args(task)
         for task in tasks_to_run:
             self.publish_task(task.state.save())
 
