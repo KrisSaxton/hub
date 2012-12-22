@@ -98,8 +98,12 @@ class Job(Task):
     def update_tasks(self, task):
         '''Update job with new task object.'''
         for i,t in enumerate(self.state.tasks):
-            if t.state.name == task.state.name:
+            if t.state.id == task.state.id:
                 print 'Updating task %s with new results' % t.state.name
+                #prevent updating parent_id, name and args
+                task.state.name = t.state.name
+                task.state.parent_id = t.state.parent_id
+                t.state.args = t.state.args
                 self.state.tasks[i] = task
         return self
 
