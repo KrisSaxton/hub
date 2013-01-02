@@ -95,15 +95,16 @@ class Job(Task):
                     print 'Task %s waiting on results of %s...' % (task.state.name, waiting_on_deptask)
         return tasks_to_run
 
-    def update_tasks(self, task):
+    def update_tasks(self, task, force=False):
         '''Update job with new task object.'''
         for i,t in enumerate(self.state.tasks):
             if t.state.id == task.state.id:
                 print 'Updating task %s with new results' % t.state.name
-                #prevent updating parent_id, name and args
-                task.state.name = t.state.name
-                task.state.parent_id = t.state.parent_id
-                t.state.args = t.state.args
+                if not force:
+                    #prevent updating parent_id, name and args
+                    task.state.name = t.state.name
+                    task.state.parent_id = t.state.parent_id
+                    task.state.args = t.state.args
                 self.state.tasks[i] = task
         return self
 
