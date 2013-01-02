@@ -20,5 +20,9 @@ def create_host(input):
     uuid = input['uuid']
     hostname = orgname + '-' + str(uuid)
     host_results = client.cmd(ldap, 'host.host_create', [orgname, hostname, uuid, mem, cpu, 'xen', 'para', storage, network])
-    return host_results
-
+    h_mem = host_results[ldap]['data'][0][1]['aenetHostMem']
+    h_cpu = host_results[ldap]['data'][0][1]['aenetHostCPU']
+    net = host_results[ldap]['data'][0][1]['aenetHostNetworkLayout']
+    storage = host_results[ldap]['data'][0][1]['aenetHostStorageLayout']
+    family = host_results[ldap]['data'][0][1]['aenetHostFamily']
+    return {'mem': h_mem, 'cpu': h_cpu, 'net_layout': net, 'family': family, 'storage': storage}
