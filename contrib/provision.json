@@ -1,4 +1,4 @@
-{"output": ["_create_host.data"],
+{"output": ["_get_uuid.data", "_reserve_ip.data"],
 
  "tasks": [
 	    {
@@ -23,7 +23,7 @@
 	    {
 	    	"name": "create_vm",
 	        "depends": ["create_host"],
-	        "args": ["_get_uuid.data", "_create_host.data"]
+	        "args": ["_get_uuid.data", "_create_host.data", true]
 	    },
 	    {
 	    	"name": "create_dhcp",
@@ -35,7 +35,29 @@
 	    },
 	    {	
 	    	"name": "power_on",
-	    	"depends": ["create_dhcp", "create_vm", "create_tftp"]
+	    	"depends": ["create_dhcp", "create_vm", "create_tftp", "create_lvm"]
+	    	"args": ["_get_uuid.data"]
+	    },
+	    {
+	    	"name": "power_off",
+	        "depends": ["power_on"],
+	        "args": ["_get_uuid.data"]
+	    },	    
+	    {
+	    	"name": "delete_vm",
+	        "depends": ["power_off"],
+	        "args": ["_get_uuid.data"]
+	    },	    
+	    {
+	    	"name": "create_vm_again",
+	        "depends": ["delete_vm"],
+	        "args": ["_get_uuid.data", "_create_host.data", false]
+	    },
+	    {	
+	    	"name": "power_on",
+	    	"depends": ["create_vm_again"]
+	    	"args": ["_get_uuid.data"]
+	    }
 	],
     
  "name": "provision"}
