@@ -26,6 +26,8 @@ class Task(object):
         self.async = async
         if not self.state.id:
             self.state.id = uuid.uuid1().__str__()
+        if not self.state.task_name:
+            self.state.task_name = ''
         if not self.state.status:
             self.state.status = 'PENDING'
 
