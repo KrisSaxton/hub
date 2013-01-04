@@ -41,6 +41,27 @@ class Worker():
         print 'Starting worker, waiting for jobs...'
         channel.start_consuming()
 
+    def _run_task(self, module, record, taskrecord):
+        args = []
+        kwargs = {}
+        if 'args' in record:
+            args = record['args']
+        task = getattr(module, module.__name__).load(taskrecord)
+        print 'Running task: %s' % task.state.name
+        try:
+            task.state.data = task(*args, **kwargs)                  
+            #task(*args, **kwargs)
+            if task.async:
+                task.state.status = 'RUNNING'
+            else:
+                task.state.status = 'SUCCESS'
+        except Exception, e:
+            task.state.status = 'FAILED'
+            task.state.msg = str(e)
+        finally:
+            self.post_result(task)
+        
+
     def run(self, ch, method, properties, taskrecord):
         '''Checks task name for matching module and class, 
         instanciates and calls run method with task args'''
@@ -48,24 +69,10 @@ class Worker():
         record = json.loads(taskrecord)
         for module in self.modules:
             if module.__name__ == record['name']:
-                args = []
-                kwargs = {}
-                if 'args' in record:
-                    args = record['args']
-                task = getattr(module, module.__name__).load(taskrecord)
-                print 'Running task: %s' % task.state.name
-                try:
-                    task.state.data = task(*args, **kwargs)                  
-                    #task(*args, **kwargs)
-                    if task.async:
-                        task.state.status = 'RUNNING'
-                    else:
-                        task.state.status = 'SUCCESS'
-                except Exception, e:
-                    task.state.status = 'FAILED'
-                    task.state.msg = str(e)
-                finally:
-                    self.post_result(task)
+                self._run_task(module, record, taskrecord)
+        for module in self.modules:
+            if module.__name__ == record['task_name'] and module.__name__ != record['name']:
+                self._run_task(module, record, taskrecord)
 
     def post_result(self, task):
         '''Post task results into the results queue.'''
