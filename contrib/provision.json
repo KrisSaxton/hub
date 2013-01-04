@@ -1,19 +1,65 @@
-{"output": ["_salt_sleep.data"],
+{"output": ["_get_uuid.data", "_reserve_ip.data"],
 
  "tasks": [
 	    {
 	        "name": "get_uuid"
 	    },
 	    {
+	    	"name": "create_host",
 	        "depends": ["get_uuid"],
-	        "args": ["_get_uuid.data"],
-	        "name": "create_host"
+	        "args": ["_get_uuid.data"]
 	    },
 	    {
+	    	"name": "create_lvm",
 	        "depends": ["create_host"],
-	        "args": ["_get_uuid.data"],
-	        "name": "create_lvm"
+	        "args": ["_get_uuid.data"]
+	    },
+	    {
+	        "name": "create_tftp",
+	        "depends": ["create_host"],
+	        "args": ["_get_uuid.data", "_power_on.id"]
+
+	    },
+	    {
+	    	"name": "create_vm",
+	        "depends": ["create_host"],
+	        "args": ["_get_uuid.data", "_create_host.data", true]
+	    },
+	    {
+	    	"name": "create_dhcp",
+	        "depends": ["reserve_ip","get_uuid"],
+	        "args": ["_get_uuid.data","_reserve_ip.data"]
+	    },
+	    {
+	        "name": "reserve_ip"
+	    },
+	    {	
+	    	"name": "power_on",
+	    	"depends": ["create_dhcp", "create_vm", "create_tftp", "create_lvm"],
+	    	"args": ["_get_uuid.data"]
+	    },
+	    {
+	    	"name": "power_off",
+	        "depends": ["power_on"],
+	        "args": ["_get_uuid.data"]
+	    },	    
+	    {
+	    	"name": "delete_vm",
+	        "depends": ["power_off"],
+	        "args": ["_get_uuid.data"]
+	    },	    
+	    {
+	    	"name": "recreate_vm",
+	    	"task_name": "create_vm",
+	        "depends": ["delete_vm"],
+	        "args": ["_get_uuid.data", "_create_host.data", false]
+	    },
+	    {	
+	    	"name": "repower_on",
+	    	"task_name": "power_on",
+	    	"depends": ["recreate_vm"],
+	    	"args": ["_get_uuid.data"]
 	    }
-	       ],
+	],
     
  "name": "provision"}

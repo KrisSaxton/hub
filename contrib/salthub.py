@@ -1,10 +1,10 @@
 from hub.lib.client import Client
 import time
 
-def update_job(name, job_id, parent_id, result, status='SUCCESS'):
+def update_job(job_id, result='DONE', status='SUCCESS'):
     client = Client('/usr/local/pkg/hub/etc/hub.conf')
-    taskdata = {'status': status, 'name': name, 'data': result, 'id': job_id, 'parent_id': parent_id }
-    client.update(parent_id, taskdata=taskdata)
+    taskdata = {'status': status, 'data': result, 'id': job_id}
+    client.update(taskdata=taskdata)
     return True
 
 def get_job(job_id):

@@ -44,6 +44,26 @@ class Dispatcher():
     def _deregister_job(self, job):
         '''Register job with dispatcher.'''
         self.registered_jobs.pop(job.state.id)
+        
+    def _start_next_task(self, job):
+        tasks_to_run = job.get_next_tasks_to_run()
+        if not tasks_to_run:
+            # We're done, calculate overall job status and exit
+            job.set_status()
+            if job.state.status == 'SUCCESS':
+                job.update_output()
+            print 'No more tasks to run for job: %s' % job.state.name
+            print 'Persisting job %s to DB and deregistering' % job.state.name
+            #self._deregister_job(job) # Will activate this once DB persistence layer exists
+            print 'Job %s completed with status: %s and output %s' % \
+                    (job.state.id, job.state.status, job.state.output)
+            
+        for task in tasks_to_run:
+            # Substitute tagged inputs with the associated results of completed tasks
+            if task.state.status != 'RUNNING' and task.state.args is not None:
+                task = job.update_task_args(task)
+            task.state.status = 'SUBMITTED'
+            self.publish_task(task.state.save())
 
     def get_job(self, ch, method, properties, jobid):
         '''Work out dependancies and order.'''
@@ -81,8 +101,10 @@ class Dispatcher():
         tasks_to_run = job.get_next_tasks_to_run()
         #This was added to fill out any id args in tasks right at the beginning
         for task in tasks_to_run:
-            task = job.update_task_args(task)
+            if task.state.args is not None:
+                task = job.update_task_args(task)
         for task in tasks_to_run:
+            task.state.status = 'SUBMITTED'
             self.publish_task(task.state.save())
 
     def publish_task(self, task):
@@ -101,30 +123,12 @@ class Dispatcher():
         if properties.correlation_id in self.registered_jobs:
             print 'Task results %r' % taskrecord
             # Turn the taskrecord into a project Task instance
-            task = Task().load(taskrecord)
+            updated_task = Task().load(taskrecord)
             # Get the related Job for this task
-            job = self.registered_jobs[task.state.parent_id]
+            job = self.registered_jobs[updated_task.state.parent_id]
             # Update the job with the new task results
-            job.update_tasks(task)
-            
-            # Now work out what's next
-            tasks_to_run = job.get_next_tasks_to_run()
-            if not tasks_to_run:
-                # We're done, calculate overall job status and exit
-                job.set_status()
-                if job.state.status == 'SUCCESS':
-                    job.update_output()
-                print 'No more tasks to run for job: %s' % job.state.name
-                print 'Persisting job %s to DB and deregistering' % job.state.name
-                #self._deregister_job(job) # Will activate this once DB persistence layer exists
-                print 'Job %s completed with status: %s and output %s' % \
-                        (job.state.id, job.state.status, job.state.output)
-                
-            for task in tasks_to_run:
-                # Substitute tagged inputs with the associated results of completed tasks
-                if task.state.status != 'RUNNING':
-                    task = job.update_task_args(task)
-                self.publish_task(task.state.save())
+            job.update_tasks(updated_task, force=True)
+            self._start_next_task(job)
         elif properties.correlation_id == 'update_task':
             print 'Task results %r' % taskrecord
             # Turn the taskrecord into a project Task instance
@@ -136,26 +140,9 @@ class Dispatcher():
                     if updated_task.state.id == task.state.id:
                         job.update_tasks(updated_task)
                         number_of_updated_tasks += 1
-                        tasks_to_run = job.get_next_tasks_to_run()
-                        if not tasks_to_run:
-                            # We're done, calculate overall job status and exit
-                            job.set_status()
-                            if job.state.status == 'SUCCESS':
-                                job.update_output()
-                            print 'No more tasks to run for job: %s' % job.state.name
-                            print 'Persisting job %s to DB and deregistering' % job.state.name
-                            #self._deregister_job(job) # Will activate this once DB persistence layer exists
-                            print 'Job %s completed with status: %s and output %s' % \
-                                    (job.state.id, job.state.status, job.state.output)
-                            
-                        for task in tasks_to_run:
-                            # Substitute tagged inputs with the associated results of completed tasks
-                            if task.state.status != 'RUNNING':
-                                task = job.update_task_args(task)
-                            self.publish_task(task.state.save())
+                        self._start_next_task(job)
             if number_of_updated_tasks == 0:
-                print "Task with id %s not found in any job" % updated_task.state.id
-                
+                print "Task with id %s not found in any job" % updated_task.state.id          
         else:
             print 'Discarding task results for unregistered job id: %s' % properties.correlation_id
 

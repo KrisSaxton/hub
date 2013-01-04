@@ -7,17 +7,17 @@ import sys
 ldap='Matt-MacBook-Air.local'
 dhcp='Matt-MacBook-Air.local'
 
-orgname = 'aethernet'
+orgname = 'automationlogic'
 mem = 256
 cpu = 1
 storage = 'basic'
 network = 'no_internet'
 
-client = salt.client.LocalClient()
+client = salt.client.LocalClient('/Users/matthew/python/salt/etc/salt/minion')
 
 @task
 def get_uuid():
-    uuid_results = client.cmd(ldap, 'host.uuid_reserve', ['get_mac=False'])
+    uuid_results = client.cmd(ldap, 'host.uuid_reserve', ['get_mac=True'])
     uuid = uuid_results[ldap]['data'][0][0]
     mac = uuid_results[ldap]['data'][1][0]
     hostname = orgname + '-' + str(uuid)
