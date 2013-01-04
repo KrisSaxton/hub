@@ -78,7 +78,7 @@ class Job(Task):
         '''Examines task statues; returns list of next tasks to run.'''
         tasks_to_run = []
         for task in self.state.tasks:
-            if task.state.status in ['SUCCESS', 'FAILED', 'RUNNING']:
+            if task.state.status in ['SUCCESS', 'FAILED', 'RUNNING', 'SUBMITTED']:
                 pass
             elif not task.state.depends and task.state.status == 'PENDING':
                 print 'Pending task %s has no dependents, publishing...' % task.state.name

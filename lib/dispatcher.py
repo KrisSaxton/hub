@@ -60,8 +60,9 @@ class Dispatcher():
             
         for task in tasks_to_run:
             # Substitute tagged inputs with the associated results of completed tasks
-            if task.state.status != 'RUNNING':
+            if task.state.status != 'RUNNING' and task.state.args is not None:
                 task = job.update_task_args(task)
+            task.state.status = 'SUBMITTED'
             self.publish_task(task.state.save())
 
     def get_job(self, ch, method, properties, jobid):
@@ -103,6 +104,7 @@ class Dispatcher():
             if task.state.args is not None:
                 task = job.update_task_args(task)
         for task in tasks_to_run:
+            task.state.status = 'SUBMITTED'
             self.publish_task(task.state.save())
 
     def publish_task(self, task):
