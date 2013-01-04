@@ -4,8 +4,8 @@ from api import task
 import salt.client
 import sys
 
-salthost='Matt-MacBook-Air.local'
-client = salt.client.LocalClient()
+salthost='xen03.aethernet.local'
+client = salt.client.LocalClient('/Users/matthew/python/salt/etc/salt/minion')
 
 @task
 def delete_vm(uuid_input):

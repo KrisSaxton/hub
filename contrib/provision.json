@@ -35,7 +35,7 @@
 	    },
 	    {	
 	    	"name": "power_on",
-	    	"depends": ["create_dhcp", "create_vm", "create_tftp", "create_lvm"]
+	    	"depends": ["create_dhcp", "create_vm", "create_tftp", "create_lvm"],
 	    	"args": ["_get_uuid.data"]
 	    },
 	    {
@@ -49,13 +49,15 @@
 	        "args": ["_get_uuid.data"]
 	    },	    
 	    {
-	    	"name": "create_vm_again",
+	    	"name": "recreate_vm",
+	    	"task_name": "create_vm",
 	        "depends": ["delete_vm"],
 	        "args": ["_get_uuid.data", "_create_host.data", false]
 	    },
 	    {	
-	    	"name": "power_on",
-	    	"depends": ["create_vm_again"]
+	    	"name": "repower_on",
+	    	"task_name": "power_on",
+	    	"depends": ["recreate_vm"],
 	    	"args": ["_get_uuid.data"]
 	    }
 	],

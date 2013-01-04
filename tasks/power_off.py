@@ -4,12 +4,12 @@ from api import task
 import salt.client
 import sys
 
-salthost='Matt-MacBook-Air.local'
-client = salt.client.LocalClient()
+salthost='xen03.aethernet.local'
+client = salt.client.LocalClient('/Users/matthew/python/salt/etc/salt/minion')
 
 @task
 def power_off(uuid_input):
     hostname = uuid_input['hostname']
-    client.cmd(salthost, 'vm.power_modify', [hostname, 'forceoff'])
+    power_results = client.cmd(salthost, 'vm.power_modify', [hostname, 'forceoff'])
     
-    return None
+    return power_results

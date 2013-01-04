@@ -13,7 +13,7 @@ cpu = 1
 storage = 'basic'
 network = 'no_internet'
 
-client = salt.client.LocalClient()
+client = salt.client.LocalClient('/Users/matthew/python/salt/etc/salt/minion')
 
 @task
 def get_uuid():

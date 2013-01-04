@@ -4,10 +4,10 @@ from api import task
 import salt.client
 import sys
 
-salthost='Matt-MacBook-Air.local'
+salthost='dhcp01.aethernet.local'
 
 
-client = salt.client.LocalClient()
+client = salt.client.LocalClient('/Users/matthew/python/salt/etc/salt/minion')
 
 @task
 def create_tftp(uuid_input, run_id):

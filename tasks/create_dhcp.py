@@ -7,11 +7,11 @@ import sys
 salthost='Matt-MacBook-Air.local'
 
 
-client = salt.client.LocalClient()
+client = salt.client.LocalClient('/Users/matthew/python/salt/etc/salt/minion')
 
 @task
 def create_dhcp(uuid_input, ip_input):
-    hostname = uuid_input['uuid']
+    hostname = uuid_input['hostname']
     mac = uuid_input['mac']
     ip = ip_input['ip']
     dhcp_results = client.cmd(salthost, 'dhcp.reservation_create', ['dhcp01', 'group1', hostname, mac, ip])
