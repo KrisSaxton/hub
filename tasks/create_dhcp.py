@@ -4,16 +4,21 @@ from api import task
 import salt.client
 import sys
 
-salthost='Matt-MacBook-Air.local'
+# To be replaced with proper config
+# in the meantime, create your own tempconfig (keep out of Git)
+import tempconfig
+salt_master_conf = tempconfig.salt_master_conf
+salthost = tempconfig.dhcp_salthost
 
-
-client = salt.client.LocalClient('/Users/matthew/python/salt/etc/salt/minion')
+# Initiate salt client
+client = salt.client.LocalClient(salt_master_conf)
 
 @task
 def create_dhcp(uuid_input, ip_input):
     hostname = uuid_input['hostname']
     mac = uuid_input['mac']
     ip = ip_input['ip']
-    dhcp_results = client.cmd(salthost, 'dhcp.reservation_create', ['dhcp01', 'group1', hostname, mac, ip])
-#    reservation_create(dhcp_server, dhcp_group, host_name, mac,  ip):
-    return dhcp_results
+    result = client.cmd(salthost, 'dhcp.reservation_create', [hostname, mac, ip])
+    if result[salthost]['exit_code'] != 0:
+        raise error.HubError(result)
+    return result

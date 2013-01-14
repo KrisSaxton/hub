@@ -4,8 +4,15 @@ from api import task
 import salt.client
 import sys
 
-salthost='xen03.aethernet.local'
-client = salt.client.LocalClient('/Users/matthew/python/salt/etc/salt/minion')
+# To be replaced with proper config
+# in the meantime, create your own tempconfig (keep out of Git)
+import tempconfig
+salt_master_conf = tempconfig.salt_master_conf
+salthost = tempconfig.vm_salthost
+
+# Initiate salt client
+client = salt.client.LocalClient(salt_master_conf)
+
 
 @task
 def create_vm(uuid_input, host_input, install):
@@ -16,12 +23,8 @@ def create_vm(uuid_input, host_input, install):
     net = host_input['net_layout'][0]
     family = host_input['family'][0]
     storage = host_input['storage'][0]
-    
-    vm_results = client.cmd(salthost, 'vm.store_create', [family, hostname, uuid, mem, cpu, storage, net, install])
-    
-#    store_create(vm_family, vm_name, vm_uuid, vm_mem, vm_cpu,
-#                vm_storage_layout, vm_network_layout,
-#                vm_install=True):
-    
-    
+
+    result = client.cmd(salthost, 'vm.store_create', [family, hostname, uuid, mem, cpu, storage, net, install])
+    if result[salthost]['exit_code'] != 0:
+        raise error.HubError(result)
     return True
