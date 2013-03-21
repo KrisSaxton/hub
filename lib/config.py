@@ -16,20 +16,22 @@ import ConfigParser
 # own modules
 import hub.lib.error as error
 
-gConfig = None
+__CONFIG_FILE = False
 
 __author__ = "Kris Saxton"
 
-def setup(config_file=None, mco=False):
-    """Instantiate (once only) and return HubConfig object."""
-    global gConfig
-# Commented this out to make sure MCollective agents re read the config if it changes
-# It may break plenty of other things, who knows! -MMB
-    if gConfig is not None and mco == False:
-        pass
-    else:
-        gConfig = HubConfig(config_file)
-    return gConfig
+def setup(config_file=None):
+    '''Read configuration file as argument (or from global var) and return 
+HubConfig object. Set global var to current config file.'''
+    global __CONFIG_FILE
+    if not config_file and not __CONFIG_FILE:
+        raise error.ConfigError('First call needs a config file')
+    _file = __CONFIG_FILE
+    if config_file:
+        _file = config_file
+    conf = HubConfig(_file)
+    __CONFIG_FILE = _file
+    return conf
 
 class HubConfig(ConfigParser.ConfigParser):
     
@@ -37,8 +39,6 @@ class HubConfig(ConfigParser.ConfigParser):
     
     def __init__(self, config_file):
         """Instantiate ConfigParser object. Parse configuration file."""
-        if config_file is None:
-            raise error.ConfigError('First call needs a config file')
         self.config_file = config_file
         ConfigParser.ConfigParser.__init__(self)
         if self.read(self.config_file) == []:

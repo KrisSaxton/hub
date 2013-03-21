@@ -16,7 +16,7 @@ class Task(object):
     '''Superclass for all Task objects. Tasks are defined units of work.'''
 
     def __init__(self, state=None, parent_id=None, async=False):
-        self.conf = config.setup('/usr/local/pkg/hub/etc/hub.conf')
+        self.conf = config.setup()
         self.broker = self.conf.get('HUB', 'broker')
         if not state:
             state = State()

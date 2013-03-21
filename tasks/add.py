@@ -3,6 +3,9 @@
 from api import task
 
 @task(async=True)
-def add(arg1, arg2):
-    print 'Passing parent id to end point %s' % add.state.parent_id
-    return arg1 + arg2
+def add():
+    output_file = '/tmp/cmdline'
+    with open(output_file, 'w') as f:
+        msg = 'kernel runid=%s consoletty' % runid
+        f.write(msg)
+        f.close()

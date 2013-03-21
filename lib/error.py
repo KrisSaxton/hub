@@ -31,3 +31,7 @@ class MethodNotImplemented(HubError):
 class ValidationError(HubError):
     '''Raising on input validation failures.'''
     pass
+
+class MessagingError(HubError):
+    '''Raised on problems connecting to messaging system.'''
+    pass 

@@ -7,8 +7,9 @@ import hub.lib.config as config
 import hub.lib.error as error
 
 class Client(object):
-
-    '''Class representing things that can get jobs.'''
+    '''
+    Class representing things that can submit and query jobs.
+    '''
 
     def __init__(self, config_file):
         try:
@@ -18,9 +19,9 @@ class Client(object):
             raise e
         self.conf = config.setup()
         self.broker = conf.get('HUB', 'broker')
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(
-            host=self.broker))
-        self.channel = self.connection.channel()
+        self.conn = pika.BlockingConnection(
+                        pika.ConnectionParameters(host=self.broker))
+        self.channel = self.conn.channel()
         result = self.channel.queue_declare(exclusive=True)
         self.callback_queue = result.method.queue
         self.channel.basic_consume(
@@ -49,23 +50,22 @@ class Client(object):
             self.corr_id = str(jobid)
         else:
             self.corr_id = str(uuid.uuid4())
-        print 'Submitting request for job with id %s' % jobid
+        _prop = pika.BasicProperties(content_type='application/json',
+                                     reply_to = self.callback_queue,
+                                     correlation_id = self.corr_id)
         self.channel.basic_publish(exchange='',
                          routing_key=self.routing_key,
-                         properties=pika.BasicProperties(
-                              content_type='application/json',
-                              reply_to = self.callback_queue,
-                              correlation_id = self.corr_id,
-                              ),
+                         properties=_prop,
                          body=self.body)
         if blocking is True:
             while self.response is None:
-                self.connection.process_data_events()
+                self.conn.process_data_events()
         return str(self.response)
     
 
     def create(self, job):
         '''Posts a new job'''
+        print 'Submitting new job to queue'
         res = self._post(None, 'create', blocking=True, job=job)
         return res
 
@@ -76,5 +76,6 @@ class Client(object):
     
     def get(self, jobid):
         '''Get status on a current job'''
+        print 'Requesting status for job {0}'.format(jobid)
         res = self._post(jobid, 'get', blocking=True)
         return res

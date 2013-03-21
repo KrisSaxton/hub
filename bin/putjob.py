@@ -2,7 +2,7 @@
 import sys
 import hub.lib.config as config
 
-config_file = '/usr/local/pkg/hub/etc/hub.conf'
+config_file = '/Users/kris/dev/hub/hub/etc/dispatcher.conf'
 
 from hub.lib.client import Client
 
