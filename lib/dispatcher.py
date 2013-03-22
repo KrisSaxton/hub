@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 '''
-This is the Hub dispatcher which performs job management functions.
+This is the Hub dispatcher which performs job management functions
 '''
 # core modules
 import sys
@@ -22,7 +22,7 @@ import json
 
 class DispatcherDaemon(Daemon):
     '''
-    Subclass of Daemon class with run method to launch dispatcher.
+    Subclass of Daemon class with run method to launch dispatcher
     '''
     def run(self, *args):
         broker = args[0]
@@ -31,10 +31,12 @@ class DispatcherDaemon(Daemon):
 
 class Dispatcher():
     '''
-    Class representing dispatcher that performs job management functions.
+    Class representing dispatcher that performs job management functions
     '''
     def __init__(self, broker):
-        '''Setup connection to broker; listen for incoming jobs and results.'''
+        '''
+        Setup connection to broker and listen for incoming jobs and results
+        '''
         self.log = logging.getLogger(__name__)
         self.broker = broker
         self.registered_jobs = {}
@@ -61,17 +63,21 @@ class Dispatcher():
             raise error.MessagingError(msg, e)
 
     def _register_job(self, job):
-        '''Register job with dispatcher.'''
+        '''
+        Register job with dispatcher
+        '''
         self.registered_jobs[job.state.id] = job
         return self.registered_jobs
 
     def _deregister_job(self, job):
-        '''Register job with dispatcher.'''
+        '''
+        Register job with dispatcher
+        '''
         self.registered_jobs.pop(job.state.id)
 
     def _start_next_task(self, job):
         tasks_to_run = job.get_next_tasks_to_run()
-        if not tasks_to_run:
+        if len(tasks_to_run) == 0:
             # We're done, calculate overall job status and exit
             job.set_status()
             if job.state.status == 'SUCCESS':
@@ -82,8 +88,8 @@ class Dispatcher():
                 job.state.name))
             # Will activate this once DB persistence layer exists
             #self._deregister_job(job)
-            self.log.info('Job {0] completed. Status: {1}, Output: {2}'.format(
-                          (job.state.id, job.state.status, job.state.output)))
+            self.log.info('Job {0} completed. Status: {1}, Output: {2}'.format(
+                          job.state.id, job.state.status, job.state.output))
 
         for task in tasks_to_run:
             # Sub tagged inputs with the associated results of completed tasks
@@ -93,10 +99,12 @@ class Dispatcher():
             self.publish_task(task.state.save())
 
     def get_job(self, ch, method, properties, jobid):
-        '''Work out dependancies and order.'''
+        '''
+        Work out dependancies and order
+        '''
         # Load the jobid from the JSON object
-        jobid = json.loads(jobid)
         self.log.info('Received status request for job {0}'.format(jobid))
+        jobid = json.loads(jobid)
         # Get the job from the store of registered jobs
         try:
             job = self.registered_jobs[jobid]
@@ -111,15 +119,14 @@ class Dispatcher():
                                    body=msg)
 
     def process_jobs(self, ch, method, properties, jobrecord):
-        '''Work out dependancies and order.'''
+        '''
+        Work out dependancies and order
+        '''
         # Create a Job instance from the job record
         job = Job().load(jobrecord)
         # Register the job with the dispatcher
         self._register_job(job)
         self.log.info('Registered job: {0}'.format(job.state.id))
-        self.log.info('Channel {0}'.format(ch))
-        self.log.info('Method {0}'.format(method))
-        self.log.info('Properties {0}'.format(properties))
         # Return registration success message to client
         _prop = pika.BasicProperties(correlation_id=properties.correlation_id)
         self.channel.basic_publish(exchange='',
@@ -139,7 +146,9 @@ class Dispatcher():
             self.publish_task(task.state.save())
 
     def publish_task(self, task):
-        '''Publish tasks to the work queue.'''
+        '''
+        Publish tasks to the work queue
+        '''
         self.log.info('Publishing task {0} to the work queue'.format(task))
         _prop = pika.BasicProperties(content_type='application/json',)
         self.channel.basic_publish(exchange='',
@@ -148,7 +157,9 @@ class Dispatcher():
                                    body=task)
 
     def process_results(self, ch, method, properties, taskrecord):
-        '''Processing results received from workers and end points.'''
+        '''
+        Processing results received from workers and end points
+        '''
         self.log.info(
             'Received task results for job {0}'.format(
                 properties.correlation_id))

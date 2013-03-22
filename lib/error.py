@@ -1,12 +1,15 @@
-'''Common application exceptions
+'''
+Common application exceptions
 
 Classes:
 Exception - Base class.
-
 '''
 
+
 class HubError(Exception):
-    '''Base class for exceptions in this application'''
+    '''
+    Base class for exceptions in this application
+    '''
     def __init__(self, msg, traceback=None):
         Exception.__init__(self, msg)
         self.exit_code = 1
@@ -20,18 +23,29 @@ class InputError(HubError):
         self.exit_code = 2
         self.msg = msg
 
-class ConfigError(InputError):
+
+class ConfigError(HubError):
     def __init__(self, msg):
+        self.exit_code = 2
         self.msg = msg
 
+
 class MethodNotImplemented(HubError):
-    '''Raised on missing essential method in subclass.'''
+    '''
+    Raised on missing essential method in subclass
+    '''
     pass
+
 
 class ValidationError(HubError):
-    '''Raising on input validation failures.'''
+    '''
+    Raising on input validation failures
+    '''
     pass
 
+
 class MessagingError(HubError):
-    '''Raised on problems connecting to messaging system.'''
-    pass 
+    '''
+    Raised on problems connecting to messaging system
+    '''
+    pass

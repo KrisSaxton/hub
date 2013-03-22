@@ -1,40 +1,54 @@
+'''
+Hub job routines
+'''
 # Core modules
 import uuid
+import logging
+
 # Own modules
 import error
 from common import State
 from tasks import Task
+
 # 3rd part modules
 import pika
 import json
 
+
 class Job(Task):
-
-    '''Superclass for all job objects. A job is a collection of tasks.'''
-
+    '''
+    Superclass for all job objects. A job is a collection of tasks
+    '''
     def __init__(self):
         super(Job, self).__init__()
 
     def _validate(self):
-        '''Ensure job is in a valid format.'''
+        '''
+        Ensure job is in a valid format
+        '''
         if not self.state.tasks:
             raise error.ValidationError('Invalid job envelope')
 
     def load(self, jobrecord):
-        '''Populate a job's state from a job record.'''
+        '''
+        Populate a job's state from a job record
+        '''
         self.state.load(jobrecord)
         if self.state.tasks:
             task_objects = []
             for task in self.state.tasks:
                 task_obj = Task(parent_id=self.state.id)
-                # Add task values from new task object to those from the jobrecord
-                task_obj.state._state = dict(task_obj.state._state.items() + task.items())
+                # Add values from new task object to those from the jobrecord
+                task_obj.state._state = dict(task_obj.state._state.items() +
+                                             task.items())
                 task_objects.append(task_obj)
             self.state.tasks = task_objects
         return self
 
     def save(self):
-        '''Save a job's state as a job record.'''
+        '''
+        Save a job's state as a job record
+        '''
         task_list = []
         #let's preserve the tasks as we don't want to actually change them
         original_tasks = self.state.tasks
@@ -64,9 +78,11 @@ class Job(Task):
     def set_status(self):
         self.state.status = self.check_status()
         return self
-        
+
     def get_tasks(self, task_name=None):
-        '''Get task objects.'''
+        '''
+        Get task objects
+        '''
         if not task_name:
             return self.state.tasks
         for task in self.state.tasks:
@@ -75,13 +91,17 @@ class Job(Task):
         return None
 
     def get_next_tasks_to_run(self):
-        '''Examines task statues; returns list of next tasks to run.'''
+        '''
+        Examines task statues; returns list of next tasks to run
+        '''
         tasks_to_run = []
         for task in self.state.tasks:
-            if task.state.status in ['SUCCESS', 'FAILED', 'RUNNING', 'SUBMITTED']:
+            if task.state.status in ['SUCCESS', 'FAILED',
+                                     'RUNNING', 'SUBMITTED']:
                 pass
             elif not task.state.depends and task.state.status == 'PENDING':
-                print 'Pending task %s has no dependents, publishing...' % task.state.name
+                self.log.debug('Pending task {0} has no dependents; publishing\
+                    '.format(task.state.name))
                 tasks_to_run.append(task)
             else:
                 waiting_on_deptask = []
@@ -92,14 +112,18 @@ class Job(Task):
                 if not waiting_on_deptask:
                     tasks_to_run.append(task)
                 else:
-                    print 'Task %s waiting on results of %s...' % (task.state.name, waiting_on_deptask)
+                    self.log.debug('Task {0} waiting on results of {1}'.format(
+                                   task.state.name, waiting_on_deptask))
         return tasks_to_run
 
     def update_tasks(self, task, force=False):
-        '''Update job with new task object.'''
-        for i,t in enumerate(self.state.tasks):
+        '''
+        Update job with new task object
+        '''
+        for i, t in enumerate(self.state.tasks):
             if t.state.id == task.state.id:
-                print 'Updating task %s with new results' % t.state.name
+                self.log.debug('Updating task {0} with new results'.format(
+                    t.state.name))
                 if not force:
                     #prevent updating parent_id, name and args
                     task.state.name = t.state.name
@@ -109,10 +133,13 @@ class Job(Task):
         return self
 
     def update_task_args(self, task):
-        '''Attempt update of parameterised task arguments.'''
-        for i,arg in enumerate(task.state.args):
+        '''
+        Attempt update of parameterised task arguments
+        '''
+        for i, arg in enumerate(task.state.args):
             if str(arg).startswith('_'):
-                print 'Found parametrised arg %s in task %s' % (arg, task.state.name)
+                self.log.debug('Found parametrised arg {0} in task {1}'.format(
+                               arg, task.state.name))
                 task_name, task_key = arg.lstrip('_').split('.')
                 source_task = self.get_tasks(task_name)
                 value = source_task.state.__getattr__(task_key)
@@ -120,10 +147,13 @@ class Job(Task):
         return task
 
     def update_output(self):
-        '''Attempt update of parameterised job output variables.'''
-        for i,var in enumerate(self.state.output):
+        '''
+        Attempt update of parameterised job output variables
+        '''
+        for i, var in enumerate(self.state.output):
             if str(var).startswith('_'):
-                print 'Found parametrised var %s in job %s' % (var, self.state.name)
+                self.log.debug('Found parametrised var {0} in job {1}'.format(
+                               var, self.state.name))
                 task_name, task_key = var.lstrip('_').split('.')
                 source_task = self.get_tasks(task_name)
                 #Would be good to check this exists, catch error MMB
@@ -131,6 +161,8 @@ class Job(Task):
                 self.state.output[i] = value
         return self
 
-    def post_result(self):
-        '''Post job results somewhere?'''
-        pass
+#    def post_result(self):
+#        '''
+#        Post job results somewhere?
+#        '''
+#        pass

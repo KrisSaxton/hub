@@ -25,6 +25,7 @@ class WorkerDaemon(Daemon):
         (broker, lib_dir, config_file) = args
         Worker(broker, lib_dir, config_file)
 
+
 class Worker():
     '''
     Class representing workers that processes tasks.
@@ -107,18 +108,17 @@ class Worker():
 
     def post_result(self, task):
         '''Post task results into the results queue.'''
-        #connection = pika.BlockingConnection(
-                                              #pika.ConnectionParameters(
-                                              #  host=self.broker))
-        #channel = connection.channel()
+        conn = pika.BlockingConnection(pika.ConnectionParameters(
+                                             host=self.broker))
+        channel = conn.channel()
         self.log.debug('Sending task results for job {0} to dispatcher'.format(
                        task.state.parent_id))
-        self.channel.basic_publish(exchange='',
-                                   routing_key='hub_results',
-                                   properties=pika.BasicProperties(
-                                   correlation_id=str(task.state.parent_id),
-                                   content_type='application/json',),
-                                   body=task.state.save())
+        channel.basic_publish(exchange='',
+                              routing_key='hub_results',
+                              properties=pika.BasicProperties(
+                              correlation_id=str(task.state.parent_id),
+                              content_type='application/json',),
+                              body=task.state.save())
 
 if __name__ == '__main__':
     '''

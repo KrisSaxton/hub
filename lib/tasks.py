@@ -1,23 +1,31 @@
+'''
+Hub task routines
+'''
 # Core modules
 import os
 import uuid
+import logging
 import subprocess
 from tempfile import NamedTemporaryFile
+
 # Own modules
 import error
 from common import State
+
 # 3rd part modules
 import pika
 import json
 import hub.lib.config as config
 
+
 class Task(object):
-
-    '''Superclass for all Task objects. Tasks are defined units of work.'''
-
+    '''
+    Superclass for all Task objects. Tasks are defined units of work
+    '''
     def __init__(self, state=None, parent_id=None, async=False):
-        self.conf = config.setup()
-        self.broker = self.conf.get('HUB', 'broker')
+        #self.conf = config.setup()
+        #self.broker = self.conf.get('HUB', 'broker')
+        self.log = logging.getLogger(__name__)
         if not state:
             state = State()
         self.state = state
@@ -51,16 +59,18 @@ class Task(object):
         return self.state.status
 
     def run(self):
-        raise error.MethodNotImplemented('All tasks must implement the run method')
+        raise error.MethodNotImplemented('All tasks must have a run method')
 
     def extrun(self, cmd, ser='json'):
-        '''Run external commands via json request/reply objects.'''
+        '''
+        Run external commands via json request/reply objects
+        '''
         request_file = NamedTemporaryFile(delete=False)
         reply_file = NamedTemporaryFile(delete=False)
         request_file.write(self.state.save())
         request_file.close()
-        print 'Running external command %s %s %s' % \
-            (cmd, request_file.name, reply_file.name)
+        self.log.info('Running external command {0} {1} {2}'.format(
+            cmd, request_file.name, reply_file.name))
         subprocess.check_call([cmd, request_file.name, reply_file.name])
         reply = open(reply_file.name)
         replydata = json.load(reply)
@@ -69,27 +79,30 @@ class Task(object):
 
         #os.unlink(request_file)
         #os.unlink(reply_file)
-        
 
-    def post_result(self):
-        '''Post task results into the results queue.'''
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.broker))
-        channel = connection.channel()
-        print 'Sending results to dispatcher with id: %s' % self.state.parent_id
-        print self._state
-        channel.basic_publish(exchange='',
-                      routing_key='hub_results',
-                      properties=pika.BasicProperties(
-                      correlation_id = str(self.state.parent_id),
-                      content_type='application/json',),
-                      body=self.state.save())
+#    def post_result(self):
+#        '''
+#        Post task results into the results queue
+#        '''
+#        connection = pika.BlockingConnection(pika.ConnectionParameters(
+#                                             host=self.broker))
+#        channel = connection.channel()
+#        print('Sending results to dispatcher with id: {0}'.format(
+#              self.state.parent_id))
+#        print self._state
+#        channel.basic_publish(exchange='',
+#                              routing_key='hub_results',
+#                              properties=pika.BasicProperties(
+#                              correlation_id=str(self.state.parent_id),
+#                              content_type='application/json',),
+#                              body=self.state.save())
+
 
 class WrappedCallableTask(Task):
-    """
+    '''
     Wraps a given callable transparently, while marking it as a valid Task.
     Generally used via @task decorator and not directly.
-
-    """
+    '''
     def __init__(self, callable, *args, **kwargs):
         super(WrappedCallableTask, self).__init__(*args, **kwargs)
         self.wrapped = callable
@@ -108,4 +121,4 @@ class WrappedCallableTask(Task):
     # Won't work until we move task data into it's own context object
     # and revert to normal get/set attr methods in the Task class
     def __getattr__(self, k):
-        return getattr(self.wrapped, k)    
+        return getattr(self.wrapped, k)
