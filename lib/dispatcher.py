@@ -106,12 +106,19 @@ class Dispatcher():
         self.log.info('Received status request for job {0}'.format(jobid))
         jobid = json.loads(jobid)
         # Get the job from the store of registered jobs
-        try:
-            job = self.registered_jobs[jobid]
-            msg = str(job.save())
-        except KeyError:
-            msg = 'Job %s not found' % jobid
-         # Return job to client
+        jobs = dict()
+        if jobid == 'all':
+            for id, job in self.registered_jobs.iteritems():
+                jobs[id] = str(job.save())
+            msg = str(jobs)
+        else:
+            try:
+                job = self.registered_jobs[jobid]
+                msg = str(job.save())
+            except KeyError:
+                msg = 'Job %s not found' % jobid
+        # Return job to client
+        self.log.info('Returning msg {0}'.format(msg))
         _prop = pika.BasicProperties(correlation_id=properties.correlation_id)
         self.channel.basic_publish(exchange='',
                                    routing_key=properties.reply_to,

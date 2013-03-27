@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 '''
 This is the Hub client which submits, updates, queries and deletes jobs
 '''
@@ -6,6 +5,7 @@ import sys
 import pika
 import json
 import uuid
+import logging
 import hub.lib.error as error
 
 
@@ -15,6 +15,7 @@ class Client(object):
     '''
     def __init__(self, broker):
         self.broker = broker
+        self.log = logging.getLogger(__name__)
         self.conn = pika.BlockingConnection(pika.ConnectionParameters(
                                             host=self.broker))
         self.channel = self.conn.channel()
@@ -31,7 +32,7 @@ class Client(object):
     def _post(self, jobid, request_type, blocking=True, taskdata=None,
               job=None):
         '''
-        Used by create get update to send request to middleware
+        Send job to messaging system
         '''
         if request_type is 'create':
             self.routing_key = 'hub_jobs'
@@ -64,7 +65,7 @@ class Client(object):
         '''
         Posts a new job
         '''
-        print 'Submitting new job to queue'
+        self.log.info('Submitting new job to queue')
         res = self._post(None, 'create', blocking=True, job=job)
         return res
 
@@ -72,14 +73,19 @@ class Client(object):
         '''
         Update a job
         '''
+        self.log.info('Submitting task results to queue')
         res = self._post('update_task', 'update', blocking=False,
                          taskdata=taskdata)
         return res
 
-    def get(self, jobid):
+    def get(self, jobid=None):
         '''
         Get status on a current job
-        '''
-        print 'Requesting status for job {0}'.format(jobid)
+        ''' 
+        if jobid is None:
+            jobid = 'all'  # Keyword recoginised by dispatcher
+            self.log.info('Requesting status for all jobs')
+        else:
+            self.log.info('Requesting status for job {0}'.format(jobid))
         res = self._post(jobid, 'get', blocking=True)
         return res

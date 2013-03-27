@@ -54,7 +54,7 @@ class Job(Task):
         original_tasks = self.state.tasks
         if self.state.tasks:
             for task in self.state.tasks:
-                task_list.append(task.state.__str__())
+                task_list.append(task.state._state)
         self.state.tasks = task_list
         #set the return and then put the tasks back how we found them
         ret = self.state.save()
@@ -160,9 +160,3 @@ class Job(Task):
                 value = source_task.state.__getattr__(task_key)
                 self.state.output[i] = value
         return self
-
-#    def post_result(self):
-#        '''
-#        Post job results somewhere?
-#        '''
-#        pass

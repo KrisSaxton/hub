@@ -23,14 +23,27 @@ class State(object):
     def __init__(self):
         self._state = {}
 
+    def __repr__(self):
+        return '%s' % self._state
+
     def __str__(self):
         return '%s' % self._state
+
+    def _convert(self, input):
+        if isinstance(input, str):
+            return input.decode('utf-8')
+        elif isinstance(input, unicode):
+            return input.encode('utf-8')
+        else:
+            return input
 
     def __setattr__(self, name, value):
         if name.startswith('_'):
             object.__setattr__(self, name, value)
         else:
-            self.__dict__['_state'][name] = value
+            unicodename = self._convert(name)
+            unicodevalue = self._convert(value)
+            self.__dict__['_state'][unicodename] = unicodevalue
 
     def __getattr__(self, name):
         if name.startswith('_'):

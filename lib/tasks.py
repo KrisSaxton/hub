@@ -23,8 +23,6 @@ class Task(object):
     Superclass for all Task objects. Tasks are defined units of work
     '''
     def __init__(self, state=None, parent_id=None, async=False):
-        #self.conf = config.setup()
-        #self.broker = self.conf.get('HUB', 'broker')
         self.log = logging.getLogger(__name__)
         if not state:
             state = State()
@@ -38,6 +36,12 @@ class Task(object):
             self.state.task_name = ''
         if not self.state.status:
             self.state.status = 'PENDING'
+
+    def __repr__(self):
+        return self.save()
+    
+    def __str__(self):
+        return self.save()
 
     def _validate(self):
         '''Ensure task is in a valid format.'''
@@ -75,27 +79,10 @@ class Task(object):
         reply = open(reply_file.name)
         replydata = json.load(reply)
         reply.close()
+        os.unlink(request_file)
+        os.unlink(reply_file)
         return replydata
 
-        #os.unlink(request_file)
-        #os.unlink(reply_file)
-
-#    def post_result(self):
-#        '''
-#        Post task results into the results queue
-#        '''
-#        connection = pika.BlockingConnection(pika.ConnectionParameters(
-#                                             host=self.broker))
-#        channel = connection.channel()
-#        print('Sending results to dispatcher with id: {0}'.format(
-#              self.state.parent_id))
-#        print self._state
-#        channel.basic_publish(exchange='',
-#                              routing_key='hub_results',
-#                              properties=pika.BasicProperties(
-#                              correlation_id=str(self.state.parent_id),
-#                              content_type='application/json',),
-#                              body=self.state.save())
 
 
 class WrappedCallableTask(Task):
