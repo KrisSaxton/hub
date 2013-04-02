@@ -73,12 +73,12 @@ Tasks have the following attributes:
 
 Data can be shared between tasks in the same job, allowing the data returned by one task to form all or part of the arguments of a subsequent task.  This is acheived using parameterisation and a couple of conventions.
 
- 1. Task arguments that begin with an underscore (_) are recognised as parametrised arguments by the dispatcher.  These special arguments have the form '_<task>.data' where '<task>' is the name of the task whose output will provide the value to substitute the argument for.
+ 1. Task arguments that begin with an underscore (\_) are recognised as parametrised arguments by the dispatcher.  These special arguments have the form '\_\<task\>.data' where '\<task\>' is the name of the task whose output will provide the value to substitute the argument for.
  2. All tasks results are stored in a special 'data' attribute which can always be safely referred to by other tasks.
 
 Example:
 
-In the example task described above task 'multiply_this' depends on the task 'add'.  One of the arguments of the task uses the special syntax '_add.data'.  The dipatcher will recognise this and substitue this argument for results from the task 'add' once it has run.  For example if the task 'add' returns result '3', the arguments for the task 'multiply_this' after parameterisation will be [3,2].  
+In the example task described above task 'multiply\_this' depends on the task 'add'.  One of the arguments of the task uses the special syntax '\_add.data'.  The dipatcher will recognise this and substitue this argument for results from the task 'add' once it has run.  For example if the task 'add' returns result '3', the arguments for the task 'multiply\_this' after parameterisation will be [3,2].  
 
 ### Task modules
 
@@ -96,14 +96,14 @@ def add(arg1, arg2):
 
 The example above shows the minimum code required to implement a Hub task.
 
- 1. from hub.lib.api import task <- this gives access to the @task decorator
- 2.@task() <- this python decorator wraps your custom function and turns it into a Hub task
- 3. def add(arg1, arg2): <- this is your custom function which must have the same name as your module
- 4.     return arg1 + arg2: <- generally you want your function to return something
+ 1. `from hub.lib.api import task` <- this gives access to the @task decorator
+ 2. `@task()` <- this python decorator wraps your custom function and turns it into a Hub task
+ 3. `def add(arg1, arg2):` <- this is your custom function which must have the same name as your module
+ 4. `    return arg1 + arg2:` <- generally you want your function to return something
 
 Task arguments and return values can be strings, integers, lists or dictionaries.  The @task decorator can also take arguments to modify the task's behaviour (see asynchronous tasks).
 
-Task modules should be saved with a '.py' extension and placed in the 'tasks_dir' directory as defined in the worker configuration (see 'Configure the worker' below).
+Task modules should be saved with a '.py' extension and placed in the 'tasks\_dir' directory as defined in the worker configuration (see 'Configure the worker' below).
 
 ### Asynchronous tasks
 
@@ -156,7 +156,6 @@ As an exercise, modify the 'add' task used in this guide changing it to an async
 
 ### Task modules in other languages
 
-
 TODO
 
 ## Installation
@@ -192,7 +191,7 @@ Resolving deltas: 100% (178/178), done.
 You need to ensure your python interpreter can find the Hub libraries.  Until Hub is properly packaged, the easiest way to do this is to adjust your PYTHONPATH to include the root of your Hub checkout.
 
 ```
-export PYTHONPATH=$PYTHONPATH:/Users/kris/dev/hub
+export PYTHONPATH=$PYTHONPATH:/Users/kris/dev/hub/src
 ```
 
 Test this worked:
@@ -215,10 +214,10 @@ Configuring the dispatcher involves creating a configuration file to specify par
 ```
 [HUB]
 broker=localhost
-pid_file=/Users/kris/dev/hub/hub/var/run/dispatcher.pid
+pid_file=/Users/kris/dev/hub/var/run/dispatcher.pid
 
 [LOGGING]
-log_file=/Users/kris/dev/hub/hub/var/log/dispatcher.log
+log_file=/Users/kris/dev/hub/var/log/dispatcher.log
 log_level=debug
 log_max_size=5242880
 log_retain=5
@@ -226,16 +225,16 @@ log_retain=5
 
 ### Configure the worker
 
-Configuring the worker involves creating a configuration file to specify parameters such as the hostname/IP of the broker, logging behaviour, and the directory where the worker should scan for task modules ('tasks_dir').  An example is show below:
+Configuring the worker involves creating a configuration file to specify parameters such as the hostname/IP of the broker, logging behaviour, and the directory where the worker should scan for task modules ('tasks\_dir').  An example is show below:
 
 ```
 [HUB]
 broker=localhost
-pid_file=/Users/kris/dev/hub/hub/var/run/worker.pid
+pid_file=/Users/kris/dev/hub/var/run/worker.pid
 tasks_dir=/Users/kris/dev/hub-tasks
 
 [LOGGING]
-log_file=/Users/kris/dev/hub/hub/var/log/worker.log
+log_file=/Users/kris/dev/hub/var/log/worker.log
 log_level=debug
 log_max_size=5242880
 log_retain=5
@@ -246,7 +245,7 @@ log_retain=5
 Start the dispatcher, passing the location of the configuration file you just created as a parameter.
 
 ```
-cd /Users/kris/dev/hub/hub
+cd /Users/kris/dev/hub
 ./bin/ctrl-hub-dispatcher -c ./etc/dispatcher.conf start
 ```
 
@@ -264,7 +263,7 @@ INFO  Starting dispatcher, listening for jobs and results...
 Start the worker, passing the location of the configuration file you just created as a parameter.
 
 ```
-cd /Users/kris/dev/hub/hub
+cd /Users/kris/dev/hub
 ./bin/ctrl-hub-worker -c ./etc/worker.conf start
 ```
 
@@ -278,7 +277,7 @@ INFO  Starting worker, waiting for tasks...
 
 ### Submit a job
 
-Copy the 'add' and 'multiply' tasks to the 'tasks_dir' on the worker (you will need to restart the worker whenever you add or modify a task module:
+Copy the 'add' and 'multiply' tasks to the 'tasks\_dir' on the worker (you will need to restart the worker whenever you add or modify a task module:
 
 #### Add module
 
