@@ -39,7 +39,7 @@ class Client(object):
             self.body = job
         elif request_type is 'update':
             self.routing_key = 'hub_results'
-            self.body = json.dumps(taskdata)
+            self.body = taskdata
         elif request_type is 'get':
             self.routing_key = 'hub_status'
             self.body = json.dumps(jobid)

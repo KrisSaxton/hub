@@ -112,6 +112,7 @@ Examples:
         log.info('Submitting task results to broker {0}...'.format(broker))
         try:
             client = Client(broker)
+            log.info('Submitting task results {0}...'.format(task))
             response = client.update(task)
         except Exception, e:
             log.exception(e)

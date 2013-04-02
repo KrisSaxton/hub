@@ -107,7 +107,54 @@ Task modules should be saved with a '.py' extension and placed in the 'tasks_dir
 
 ### Asynchronous tasks
 
+By default, Hub tasks will occupy (block) a worker until the task has returned its results.  For long running tasks, you may not want a worker to wait for these results, but continue processing other tasks.  You can acheive this effect using asynchronous tasks.  To mark a task as asyncronous, pass the 'async=True' parameter to the task decorator when writing your task module.
+
+For example:
+
+```
+from hub.lib.api import task
+
+@task(async=True)
+def add(arg1, arg2):
+    return arg1 + arg2
+```
+
+When a task with this parameter is run, the worker will only test if the task was launched successfully and will not wait for the results.  The worker will still send a result to the dispatcher indicating the task was launched successfully, but the dispatcher will update the task status to 'RUNNING' instead of 'SUCCESS' or 'FAILURE' as with a non-asyncronous task.
+
+At some point however, the task process initiated by the worker will complete and these results will need to be returned to the dispatcher.  Returning these results requires a little more work as you have to integrate a small Hub 'returner' into your application and ensure that this is called with the correct parameters when the task process completes.
+
+A Hub returner can be embeded in a python application or run using the 'hub-client' utility.
+
+A simple example of a Hub returner is shown below:
+
+```python
+#!/usr/bin/env python
+
+from hub.lib.client import Client
+
+def send_results(task_id):
+    taskdata = {'status': 'SUCCESS', 'data': 4, 'id': task_id }
+    Client().update(taskdata)
+
+if __name__ == '__main__':
+    send_results(sys.argv[1])
+```
+
+The 'taskdata' in the example above could also be written to file and submitted via the hub-client utility as follows:
+
+```
+cat /tmp/results.job | ./bin/hub-client -b localhost -U 
+Submitting task results to broker localhost...
+Submitting task results {"status": "SUCCESS", "data": 4, "id": "ccb04038-9bad-11e2-b4e1-98fe943f85f6" }
+...
+Submitting task results to queue
+Successfully submitted task results: None
+```
+
+As an exercise, modify the 'add' task used in this guide changing it to an asynchronous task.  Submit the tasks results used in the exampe above and demonstrate that the new output of the 'addsum' job is now 8.
+
 ### Task modules in other languages
+
 
 TODO
 

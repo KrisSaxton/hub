@@ -121,7 +121,7 @@ class Worker():
                               properties=pika.BasicProperties(
                               correlation_id=str(task.state.parent_id),
                               content_type='application/json',),
-                              body=task.state.save())
+                              body=task.save())
 
 if __name__ == '__main__':
     '''
