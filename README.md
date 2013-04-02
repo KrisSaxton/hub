@@ -156,7 +156,6 @@ As an exercise, modify the 'add' task used in this guide changing it to an async
 
 ### Task modules in other languages
 
-
 TODO
 
 ## Installation
@@ -192,7 +191,7 @@ Resolving deltas: 100% (178/178), done.
 You need to ensure your python interpreter can find the Hub libraries.  Until Hub is properly packaged, the easiest way to do this is to adjust your PYTHONPATH to include the root of your Hub checkout.
 
 ```
-export PYTHONPATH=$PYTHONPATH:/Users/kris/dev/hub
+export PYTHONPATH=$PYTHONPATH:/Users/kris/dev/hub/src
 ```
 
 Test this worked:
@@ -215,10 +214,10 @@ Configuring the dispatcher involves creating a configuration file to specify par
 ```
 [HUB]
 broker=localhost
-pid_file=/Users/kris/dev/hub/hub/var/run/dispatcher.pid
+pid_file=/Users/kris/dev/hub/var/run/dispatcher.pid
 
 [LOGGING]
-log_file=/Users/kris/dev/hub/hub/var/log/dispatcher.log
+log_file=/Users/kris/dev/hub/var/log/dispatcher.log
 log_level=debug
 log_max_size=5242880
 log_retain=5
@@ -231,11 +230,11 @@ Configuring the worker involves creating a configuration file to specify paramet
 ```
 [HUB]
 broker=localhost
-pid_file=/Users/kris/dev/hub/hub/var/run/worker.pid
+pid_file=/Users/kris/dev/hub/var/run/worker.pid
 tasks_dir=/Users/kris/dev/hub-tasks
 
 [LOGGING]
-log_file=/Users/kris/dev/hub/hub/var/log/worker.log
+log_file=/Users/kris/dev/hub/var/log/worker.log
 log_level=debug
 log_max_size=5242880
 log_retain=5
@@ -246,7 +245,7 @@ log_retain=5
 Start the dispatcher, passing the location of the configuration file you just created as a parameter.
 
 ```
-cd /Users/kris/dev/hub/hub
+cd /Users/kris/dev/hub
 ./bin/ctrl-hub-dispatcher -c ./etc/dispatcher.conf start
 ```
 
@@ -264,7 +263,7 @@ INFO  Starting dispatcher, listening for jobs and results...
 Start the worker, passing the location of the configuration file you just created as a parameter.
 
 ```
-cd /Users/kris/dev/hub/hub
+cd /Users/kris/dev/hub
 ./bin/ctrl-hub-worker -c ./etc/worker.conf start
 ```
 
