@@ -151,6 +151,7 @@ Submitting task results to queue
 Successfully submitted task results: None
 ```
 
+Note that the value of 'id' must be the Task ID (not the job ID) which can be found using the search facility of 'hub-client'.
 As an exercise, modify the 'add' task used in this guide changing it to an asynchronous task.  Submit the tasks results used in the exampe above and demonstrate that the new output of the 'addsum' job is now 8.
 
 ### Task modules in other languages
