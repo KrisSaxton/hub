@@ -22,17 +22,20 @@ class WorkerDaemon(Daemon):
     Subclass of Daemon class with run method to launch worker.
     '''
     def run(self, *args):
-        (broker, lib_dir, config_file) = args
-        Worker(broker, lib_dir, config_file)
-
+        self.log = logging.getLogger(__name__)
+        (broker, lib_dir) = args
+        try:
+            Worker(broker, lib_dir)
+        except Exception, e:
+            self.log.exception(e)
+            
 
 class Worker():
     '''
     Class representing workers that processes tasks.
     '''
-    def __init__(self, broker, tasks_dir, config_file):
+    def __init__(self, broker, tasks_dir):
         '''Load all worker task plugins, connect to messaging system.'''
-        self.conf = config.setup(config_file)
         self.log = logging.getLogger(__name__)
         self.broker = broker
         self.tasks_dir = tasks_dir
@@ -56,7 +59,7 @@ class Worker():
 
         # Setup connection to broker and declare the work queue
         try:
-            self.log.info('Starting worker, waiting for jobs...')
+            self.log.info('Starting worker, waiting for tasks...')
             self.conn = pika.BlockingConnection(pika.ConnectionParameters(
                                                 host=self.broker))
             self.channel = self.conn.channel()
@@ -125,5 +128,4 @@ if __name__ == '__main__':
     Run worker directly by executing this module, passing the broker
     hostname/IP and the lib dir for the plugins as arguments.
     '''
-    w = Worker(sys.argv[1:3])
-    print(w)
+    Worker(sys.argv[1], sys.argv[2])

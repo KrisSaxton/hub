@@ -25,8 +25,12 @@ class DispatcherDaemon(Daemon):
     Subclass of Daemon class with run method to launch dispatcher
     '''
     def run(self, *args):
+        self.log = logging.getLogger(__name__)
         broker = args[0]
-        Dispatcher(broker)
+        try:
+            Dispatcher(broker)
+        except Exception, e:
+            self.log.exception(e)
 
 
 class Dispatcher():
@@ -204,4 +208,7 @@ if __name__ == '__main__':
     Run dispatcher directly by executing this module, passing the broker
     hostname/IP as the only argument.
     '''
-    Dispatcher(sys.argv[0])
+    try:
+        Dispatcher(sys.argv[1])
+    except Exception, e:
+        print(e)

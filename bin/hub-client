@@ -56,6 +56,8 @@ Examples:
                      dest='create', help="submit a new job")
     group.add_option('-D', '--delete', action='store_true',
                      dest='delete', help="delete a job")
+    group.add_option('-U', '--update', action='store_true',
+                     dest='update', help="update a job with new task results")
     parser.add_option_group(group)
 
     (options, args) = parser.parse_args()
@@ -86,18 +88,34 @@ Examples:
         for line in fileinput.input(args):
             job += line
         log.info('Submitting job to broker {0}...'.format(broker))
-        client = Client(broker)
-        response = client.create(job)
+        try:
+            client = Client(broker)
+            response = client.create(job)
+        except Exception, e:
+            log.exception(e)
         log.info('Successfully submitted job: {0}'.format(response))
     elif options.search:
         try:
             job = args[0]
-            log.info('Submitting job status request for job: {0}'.format(job))
         except IndexError:
-            log.info('Submitting job status request for all jobs')
-        client = Client(broker)
-        response = client.get(job)
+            job = None
+        try:
+            client = Client(broker)
+            response = client.get(job)
+        except Exception, e:
+            log.exception(e)
         log.info(response)
+    elif options.update:
+        task = ''
+        for line in fileinput.input(args):
+            task += line
+        log.info('Submitting task results to broker {0}...'.format(broker))
+        try:
+            client = Client(broker)
+            response = client.update(task)
+        except Exception, e:
+            log.exception(e)
+        log.info('Successfully submitted task results: {0}'.format(response))
     elif options.delete:
         if len(args) != 1:
             parser.error('Delete requires a job id')

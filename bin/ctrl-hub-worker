@@ -76,16 +76,21 @@ Examples:
     broker = conf.get('HUB', 'broker')
     pid_file = conf.get('HUB', 'pid_file')
     tasks_dir = conf.get('HUB', 'tasks_dir')
-    config_file = options.config_file
 
     daemon = WorkerDaemon(pid_file)
     if action == 'start':
         log.info('Starting worker, connecting to broker {0}...'.format(
                   broker))
-        daemon.start(broker, tasks_dir, config_file)
+        try:
+            daemon.start(broker, tasks_dir)
+        except Exception, e:
+            log.exception(e)
     if action == 'stop':
         log.info('Shutting down worker...')
-        daemon.stop()
+        try:
+            daemon.stop()
+        except Exception, e:
+            log.exception(e)
                   
 if __name__ == '__main__':
     try:
