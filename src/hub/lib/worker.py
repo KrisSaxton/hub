@@ -25,19 +25,38 @@ class WorkerDaemon(Daemon):
         self.log = logging.getLogger(__name__)
         (broker, lib_dir) = args
         try:
-            Worker(broker, lib_dir)
+            Worker().start(broker, lib_dir)
         except Exception, e:
             self.log.exception(e)
-            
+
 
 class Worker():
     '''
     Class representing workers that processes tasks.
     '''
-    def __init__(self, broker, tasks_dir):
+    def __init__(self):
         '''Load all worker task plugins, connect to messaging system.'''
         self.log = logging.getLogger(__name__)
+
+    def start(self, broker, tasks_dir):
         self.broker = broker
+        # Setup connection to broker and declare the work queue
+        try:
+            self.log.info('Starting worker, waiting for tasks...')
+            self.conn = pika.BlockingConnection(pika.ConnectionParameters(
+                                                host=self.broker))
+            self.channel = self.conn.channel()
+            self.channel.queue_declare(queue='hub_tasks')
+            self.channel.basic_consume(self.run,
+                                       queue='hub_tasks', no_ack=True)
+            self.channel.start_consuming()
+        except pika.exceptions.AMQPConnectionError, e:
+            self.log.exception(e)
+            msg = ('Problem connectting to broker {0}'.format(self.broker))
+            self.log.error(msg)
+            raise error.MessagingError(msg, e)
+
+    def _load_task_modules(self, tasks_dir):
         self.tasks_dir = tasks_dir
         os.sys.path.append(self.tasks_dir)
         plugins = []
@@ -56,22 +75,6 @@ class Worker():
                     self.log.exception(e)
         self.log.debug('Active modules {0}'.format(self.modules))
         # TODO load plugins only as they are called?
-
-        # Setup connection to broker and declare the work queue
-        try:
-            self.log.info('Starting worker, waiting for tasks...')
-            self.conn = pika.BlockingConnection(pika.ConnectionParameters(
-                                                host=self.broker))
-            self.channel = self.conn.channel()
-            self.channel.queue_declare(queue='hub_tasks')
-            self.channel.basic_consume(self.run,
-                                       queue='hub_tasks', no_ack=True)
-            self.channel.start_consuming()
-        except pika.exceptions.AMQPConnectionError, e:
-            self.log.exception(e)
-            msg = ('Problem connectting to broker {0}'.format(self.broker))
-            self.log.error(msg)
-            raise error.MessagingError(msg, e)
 
     def _run_task(self, module, record, taskrecord):
         args = []
@@ -112,7 +115,7 @@ class Worker():
     def post_result(self, task):
         '''Post task results into the results queue.'''
         conn = pika.BlockingConnection(pika.ConnectionParameters(
-                                             host=self.broker))
+                                       host=self.broker))
         channel = conn.channel()
         self.log.debug('Sending task results for job {0} to dispatcher'.format(
                        task.state.parent_id))

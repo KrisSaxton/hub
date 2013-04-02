@@ -28,7 +28,7 @@ class DispatcherDaemon(Daemon):
         self.log = logging.getLogger(__name__)
         broker = args[0]
         try:
-            Dispatcher(broker)
+            Dispatcher().start(broker)
         except Exception, e:
             self.log.exception(e)
 
@@ -37,13 +37,15 @@ class Dispatcher():
     '''
     Class representing dispatcher that performs job management functions
     '''
-    def __init__(self, broker):
+    def __init__(self):
         '''
         Setup connection to broker and listen for incoming jobs and results
         '''
         self.log = logging.getLogger(__name__)
-        self.broker = broker
         self.registered_jobs = {}
+
+    def start(self, broker):
+        self.broker = broker
         try:
             self.conn = pika.BlockingConnection(pika.ConnectionParameters(
                                                 host=self.broker))
@@ -209,6 +211,6 @@ if __name__ == '__main__':
     hostname/IP as the only argument.
     '''
     try:
-        Dispatcher(sys.argv[1])
+        Dispatcher().start(sys.argv[1])
     except Exception, e:
         print(e)
