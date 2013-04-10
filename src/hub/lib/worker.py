@@ -25,7 +25,7 @@ class WorkerDaemon(Daemon):
         self.log = logging.getLogger(__name__)
         (broker, lib_dir) = args
         try:
-            Worker().start(broker, lib_dir)
+            Worker(lib_dir).start(broker)
         except Exception, e:
             self.log.exception(e)
 
@@ -34,33 +34,16 @@ class Worker():
     '''
     Class representing workers that processes tasks.
     '''
-    def __init__(self):
+    def __init__(self, tasks_dir):
         '''Load all worker task plugins, connect to messaging system.'''
         self.log = logging.getLogger(__name__)
-
-    def start(self, broker, tasks_dir):
-        self.broker = broker
-        # Setup connection to broker and declare the work queue
-        try:
-            self.log.info('Starting worker, waiting for tasks...')
-            self.conn = pika.BlockingConnection(pika.ConnectionParameters(
-                                                host=self.broker))
-            self.channel = self.conn.channel()
-            self.channel.queue_declare(queue='hub_tasks')
-            self.channel.basic_consume(self.run,
-                                       queue='hub_tasks', no_ack=True)
-            self.channel.start_consuming()
-        except pika.exceptions.AMQPConnectionError, e:
-            self.log.exception(e)
-            msg = ('Problem connectting to broker {0}'.format(self.broker))
-            self.log.error(msg)
-            raise error.MessagingError(msg, e)
+        self.modules = self._load_task_modules(tasks_dir)
 
     def _load_task_modules(self, tasks_dir):
         self.tasks_dir = tasks_dir
         os.sys.path.append(self.tasks_dir)
         plugins = []
-        self.modules = []
+        modules = []
         # Scan the plugins directory for files ending in .py and import them
         for found_plugin in os.listdir(self.tasks_dir):
             if found_plugin.endswith('.py'):
@@ -68,13 +51,14 @@ class Worker():
                 try:
                     self.log.debug('Importing task {0}'.format(
                         plugin_name))
-                    self.modules.append(__import__(plugin_name))
+                    modules.append(__import__(plugin_name))
                 except Exception, e:
                     self.log.warn('Failed to import task {0}'.format(
                         plugin_name))
                     self.log.exception(e)
-        self.log.debug('Active modules {0}'.format(self.modules))
+        self.log.debug('Active modules {0}'.format(modules))
         # TODO load plugins only as they are called?
+        return modules
 
     def _run_task(self, module, record, taskrecord):
         args = []
@@ -96,6 +80,24 @@ class Worker():
             task.state.msg = str(e)
         finally:
             self.post_result(task)
+
+    def start(self, broker):
+        self.broker = broker
+        # Setup connection to broker and declare the work queue
+        try:
+            self.log.info('Starting worker, waiting for tasks...')
+            self.conn = pika.BlockingConnection(pika.ConnectionParameters(
+                                                host=self.broker))
+            self.channel = self.conn.channel()
+            self.channel.queue_declare(queue='hub_tasks')
+            self.channel.basic_consume(self.run,
+                                       queue='hub_tasks', no_ack=True)
+            self.channel.start_consuming()
+        except pika.exceptions.AMQPConnectionError, e:
+            self.log.exception(e)
+            msg = ('Problem connectting to broker {0}'.format(self.broker))
+            self.log.error(msg)
+            raise error.MessagingError(msg, e)
 
     def run(self, ch, method, properties, taskrecord):
         '''
