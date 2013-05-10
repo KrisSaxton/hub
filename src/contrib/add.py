@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from api import task
+from hub.lib.api import task
 
 @task(async=True)
 def add(arg1, arg2):

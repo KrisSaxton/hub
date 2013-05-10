@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from api import task
+from hub.lib.api import task
 
 @task
 def multiply(arg1, arg2):
