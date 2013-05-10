@@ -43,6 +43,32 @@ class Dispatcher():
         '''
         self.log = logging.getLogger(__name__)
         self.registered_jobs = {}
+        # Setup config
+        try:
+            self.conf = config.setup('/usr/local/pkg/hub/etc/dispatcher.conf')
+        except error.ConfigError, e:
+            print e.msg
+            raise e
+        self.databaseType = self.conf.get('DATABASE','type')
+        self.databaseHost = self.conf.get('DATABASE','host')
+        self.databasePort = self.conf.get('DATABASE','port')
+        self.databaseInstance = self.conf.get('DATABASE','instance')
+        
+        self.databaseModule = __import__('hub.lib.database',fromlist = [self.databaseType])
+        self.db = getattr(self.databaseModule, self.databaseType)
+
+    def _persist_job(self, job):
+        
+        self.db(self.databaseHost,self.databasePort,self.databaseInstance).putjob(job)
+        
+    def _retreive_job(self, job_id):
+        
+        job = self.db(self.databaseHost,self.databasePort,self.databaseInstance).getjob(job_id)
+        return job
+    
+    def _retreive_jobid(self, task_id):
+        jobid = self.db(self.databaseHost,self.databasePort,self.databaseInstance).getjobid(task_id)
+        return jobid
 
     def start(self, broker):
         self.broker = broker
@@ -92,8 +118,9 @@ class Dispatcher():
                 job.state.name))
             self.log.debug('Persisting job {0} to DB and deregistering'.format(
                 job.state.name))
-            # Will activate this once DB persistence layer exists
-            #self._deregister_job(job)
+            self._persist_job(job)
+            # DONE Will activate this once DB persistence layer exists
+            self._deregister_job(job)
             self.log.info('Job {0} completed. Status: {1}, Output: {2}'.format(
                           job.state.id, job.state.status, job.state.output))
 
@@ -123,6 +150,13 @@ class Dispatcher():
                 msg = str(job.save())
             except KeyError:
                 msg = 'Job %s not found' % jobid
+                #so let's check the database
+                job = self._retreive_job(jobid)
+                if job is not None:
+                    msg = job
+                else:
+                    msg = 'Job %s not found' % jobid
+
         # Return job to client
         self.log.info('Returning msg {0}'.format(msg))
         _prop = pika.BasicProperties(correlation_id=properties.correlation_id)
@@ -199,8 +233,28 @@ class Dispatcher():
                         number_of_updated_tasks += 1
                         self._start_next_task(job)
             if number_of_updated_tasks == 0:
-                self.log.warn('Task with id {0} not found in any job'.format(
+                self.log.warn('Task with id {0} not found in any registered job now check DB'.format(
                               updated_task.state.id))
+                jobid = self._retreive_jobid(updated_task.state.id)
+                jobrecord = self._retreive_job(jobid)
+                if jobrecord is not None:
+                    job = Job().load(jobrecord)
+                    # Re-Register the job with the dispatcher
+                    self._register_job(job)
+                    self.log.info('Found in DB so Re-Registered job: {0}'.format(job.state.id))
+                    for task in job.state.tasks:
+                        if updated_task.state.id == task.state.id:
+                            job.update_tasks(updated_task)
+                            number_of_updated_tasks += 1
+                            self._start_next_task(job)
+                    if number_of_updated_tasks == 0:
+                        self.log.warn('Task with id {0} not found in ANY job'.format(
+                                      updated_task.state.id))
+                        self._deregister_job(job)
+                else:
+                    self.log.warn('Task with id {0} not found in ANY job'.format(
+                                      updated_task.state.id))
+
         else:
             self.log.warn('Discarding task results for unknown job {0}'.format(
                           properties.correlation_id))
