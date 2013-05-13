@@ -7,6 +7,7 @@ import sys
 import uuid
 import logging
 import traceback
+import time
 
 # own modules
 import hub.lib.error as error
@@ -113,6 +114,7 @@ class Dispatcher():
             # We're done, calculate overall job status and exit
             job.set_status()
             if job.state.status == 'SUCCESS':
+                job.state.end_time = time.time()
                 job.update_output()
             self.log.info('No more tasks to run for job {0}'.format(
                 job.state.name))
@@ -129,6 +131,8 @@ class Dispatcher():
             if task.state.status != 'RUNNING' and task.state.args is not None:
                 task = job.update_task_args(task)
             task.state.status = 'SUBMITTED'
+            if not task.state.start_time:
+                task.state.start_time = time.time()
             self.publish_task(task.state.save())
 
     def get_job(self, ch, method, properties, jobid):
@@ -190,6 +194,8 @@ class Dispatcher():
                 task = job.update_task_args(task)
         for task in tasks_to_run:
             task.state.status = 'SUBMITTED'
+            if not task.state.start_time:
+                task.state.start_time = time.time()
             self.publish_task(task.state.save())
 
     def publish_task(self, task):
@@ -212,6 +218,20 @@ class Dispatcher():
                 properties.correlation_id))
         # Check if task is registered to this dispatcher
         if properties.correlation_id in self.registered_jobs:
+            self.log.info('Task results: {0}'.format(taskrecord))
+            # Turn the taskrecord into a project Task instance
+            updated_task = Task().load(taskrecord)
+            # Get the related Job for this task
+            job = self.registered_jobs[updated_task.state.parent_id]
+            # Update the job with the new task results
+            job.update_tasks(updated_task, force=True)
+            self._start_next_task(job)
+        elif self._retreive_job(properties.correlation_id) is not None:
+            # Re-Register the job with the dispatcher
+            jobrecord = self._retreive_job(properties.correlation_id)
+            job = Job().load(jobrecord)
+            self._register_job(job)
+            self.log.info('Found in DB so Re-Registered job: {0}'.format(job.state.id))
             self.log.info('Task results: {0}'.format(taskrecord))
             # Turn the taskrecord into a project Task instance
             updated_task = Task().load(taskrecord)

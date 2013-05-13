@@ -106,11 +106,18 @@ Examples:
             response = client.get(job)
         except Exception, e:
             log.exception(e)
+        print ""
         try:
-            test = json.loads(response)
+            jobrec = json.loads(response)
+            if jobrec['start_time'] and jobrec['end_time']:
+                print "Job {0} has completed in: {1}s".format(jobrec['name'],str((jobrec['end_time']-jobrec['start_time'])))
+            for task in jobrec['tasks']:
+                if task['start_time'] and task['end_time']:
+                    print "Task {0} completed in {1}s".format(task['name'],str((task['end_time']-task['start_time'])) )
         except ValueError:
-            test = response
-        log.info(pprint.pformat(test))
+            jobrec = response
+        print ""
+        log.info(pprint.pformat(jobrec))
         #log.info(response)
     elif options.update:
         task = ''

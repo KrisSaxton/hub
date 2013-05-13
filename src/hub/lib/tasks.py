@@ -15,6 +15,7 @@ from common import State
 # 3rd part modules
 import pika
 import json
+import time
 import hub.lib.config as config
 
 
@@ -29,6 +30,9 @@ class Task(object):
         self.state = state
         if parent_id is not None:
             self.state.parent_id = parent_id
+        if self.state.start_time is None:
+            if self.__class__.__name__ == 'Job':
+                self.state.start_time = time.time()
         self.async = async
         if not self.state.id:
             self.state.id = uuid.uuid1().__str__()
