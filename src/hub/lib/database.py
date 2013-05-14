@@ -5,6 +5,7 @@ Classes:
 HubDatabase - Base class.
 '''
 import json
+import logging
 
 class HubDatabase():
     '''
@@ -21,12 +22,22 @@ class HubRedis(HubDatabase):
         self.password = password
         self.instance = int(instance)
         import redis
-        self.db = redis.StrictRedis(host=self.host,port=self.port,db=self.instance)
+        self.db = redis.StrictRedis(host=self.host,port=self.port,db=self.instance) 
+        self.log = logging.getLogger(__name__)
+
     
     def putjob(self, job):
         self.db.set(job.state.id, job)
         for task in job.state.tasks:
-            self.db.set(task.state.id, job.state.id)
+#            self.db.set(task.state.id, 'id', job.state.id)
+            for k, v in task.state._state.iteritems():
+#                self.log.info(k + ":" + str(v))
+                if k == "status" and v not in ['SUCCESS', 'FAILURE']:
+                    self.db.sadd('INCOMPLETE', task.state.id)
+                elif k == "status":
+                    self.db.srem('INCOMPLETE', task.state.id)
+                self.db.hset(task.state.id, k, v)
+                
         return True
     
     def getjob(self, jobid):
@@ -34,5 +45,5 @@ class HubRedis(HubDatabase):
         return ret
     
     def getjobid(self, taskid):
-        ret = self.db.get(taskid)
+        ret = self.db.hget(taskid, 'parent_id')
         return ret
