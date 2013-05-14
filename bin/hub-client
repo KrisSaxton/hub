@@ -109,11 +109,15 @@ Examples:
         print ""
         try:
             jobrec = json.loads(response)
-            if jobrec['start_time'] and jobrec['end_time']:
+            try:
                 print "Job {0} has completed in: {1}s".format(jobrec['name'],str((jobrec['end_time']-jobrec['start_time'])))
+            except KeyError:
+                pass
             for task in jobrec['tasks']:
-                if task['start_time'] and task['end_time']:
+                try:
                     print "Task {0} completed in {1}s".format(task['name'],str((task['end_time']-task['start_time'])) )
+                except KeyError:
+                    pass
         except ValueError:
             jobrec = response
         print ""
