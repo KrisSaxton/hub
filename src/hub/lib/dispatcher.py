@@ -8,6 +8,7 @@ import uuid
 import logging
 import traceback
 import time
+import threading
 
 # own modules
 import hub.lib.error as error
@@ -57,6 +58,34 @@ class Dispatcher():
         
         self.databaseModule = __import__('hub.lib.database',fromlist = [self.databaseType])
         self.db = getattr(self.databaseModule, self.databaseType)
+        
+        #threading.Thread(target=self._caretaker).start()
+        #self._caretaker()
+
+    def _caretaker(self):
+        self.log.info("Caretaker waiting on lock...")
+        lock = threading.Lock().acquire()
+        self.log.info("Caretaker Running...")
+        dbI=self.db(self.databaseHost,self.databasePort,self.databaseInstance)
+        incomplete = dbI.getincompletetasks()
+        #self.log.info(str(incomplete))
+        for task_id in incomplete:
+            jobid = dbI.getjobid(task_id)
+            jobrecord = dbI.getjob(jobid)
+            #TODO get task record not job record
+            job = Job().load(jobrecord)
+            self.log.info(str(job.state.tasks))
+            for task in job.state.tasks:
+                if task.state.id == task_id and task.state.timeout and task.state.start_time:
+                    if task.state.timeout < (time.time() - task.state.start_time):
+                        self.log.info("Setting task {0} from job {1} as FAILED".format(task.state.id,job.state.id))
+                        task.state.status = 'FAILED'
+                        task.state.end_time = time.time()
+                        job.state.status = 'FAILED'
+                        job.state.end_time = time.time()                        
+                        job.save()
+                        dbI.putjob(job)
+        lock.release()            
 
     def _persist_job(self, job):
         
@@ -133,6 +162,9 @@ class Dispatcher():
             task.state.status = 'SUBMITTED'
             if not task.state.start_time:
                 task.state.start_time = time.time()
+            if task.state.timeout:
+                self.log.debug("Task {0} timeout in {1}".format(task.state.id,str(task.state.timeout)))
+                threading.Timer(task.state.timeout, self._caretaker).start()
             self.publish_task(task.state.save())
 
     def get_job(self, ch, method, properties, jobid):
@@ -196,6 +228,9 @@ class Dispatcher():
             task.state.status = 'SUBMITTED'
             if not task.state.start_time:
                 task.state.start_time = time.time()
+            if task.state.timeout:
+                self.log.debug("Task {0} timeout in {1}".format(task.state.id,str(task.state.timeout)))
+                threading.Timer(task.state.timeout, self._caretaker).start()
             self.publish_task(task.state.save())
 
     def publish_task(self, task):

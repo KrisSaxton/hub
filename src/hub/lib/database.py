@@ -28,11 +28,12 @@ class HubRedis(HubDatabase):
     
     def putjob(self, job):
         self.db.set(job.state.id, job)
+        #TODO loop this too
         for task in job.state.tasks:
-#            self.db.set(task.state.id, 'id', job.state.id)
+            self.db.hset(task.state.id, 'task', task)
             for k, v in task.state._state.iteritems():
-#                self.log.info(k + ":" + str(v))
-                if k == "status" and v not in ['SUCCESS', 'FAILURE']:
+                #self.log.info(k + ":" + str(v))
+                if k == "status" and v not in ['SUCCESS', 'FAILED']:
                     self.db.sadd('INCOMPLETE', task.state.id)
                 elif k == "status":
                     self.db.srem('INCOMPLETE', task.state.id)
@@ -44,6 +45,14 @@ class HubRedis(HubDatabase):
         ret = self.db.get(jobid)
         return ret
     
+    def gettask(self, taskid):
+        ret = self.db.hget(taskid, 'task')
+        return ret
+        
     def getjobid(self, taskid):
         ret = self.db.hget(taskid, 'parent_id')
+        return ret
+    
+    def getincompletetasks(self):
+        ret = self.db.smembers('INCOMPLETE')
         return ret
