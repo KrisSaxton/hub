@@ -58,23 +58,25 @@ class Dispatcher():
         
         self.databaseModule = __import__('hub.lib.database',fromlist = [self.databaseType])
         self.db = getattr(self.databaseModule, self.databaseType)
+        self.ct_lock = threading.Lock()
         
         #threading.Thread(target=self._caretaker).start()
         #self._caretaker()
 
     def _caretaker(self):
         self.log.info("Caretaker waiting on lock...")
-        lock = threading.Lock().acquire()
+        
+        self.ct_lock.acquire()
         self.log.info("Caretaker Running...")
         dbI=self.db(self.databaseHost,self.databasePort,self.databaseInstance)
         incomplete = dbI.getincompletetasks()
-        #self.log.info(str(incomplete))
+        self.log.info(str(incomplete))
         for task_id in incomplete:
             jobid = dbI.getjobid(task_id)
             jobrecord = dbI.getjob(jobid)
             #TODO get task record not job record
             job = Job().load(jobrecord)
-            self.log.info(str(job.state.tasks))
+            self.log.info(str(task_id))
             for task in job.state.tasks:
                 if task.state.id == task_id and task.state.timeout and task.state.start_time:
                     if task.state.timeout < (time.time() - task.state.start_time):
@@ -85,7 +87,7 @@ class Dispatcher():
                         job.state.end_time = time.time()                        
                         job.save()
                         dbI.putjob(job)
-        lock.release()            
+        self.ct_lock.release()            
 
     def _persist_job(self, job):
         
