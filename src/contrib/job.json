@@ -2,7 +2,8 @@
  "tasks":[
  	{
  		"args": [1, 2],
- 		"name": "add"
+ 		"name": "add",
+                "timeout": 10
  	},
  	{
  		"depends": ["add"],
