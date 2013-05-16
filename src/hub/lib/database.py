@@ -25,6 +25,9 @@ class HubRedis(HubDatabase):
         self.db = redis.StrictRedis(host=self.host,port=self.port,db=self.instance) 
         self.log = logging.getLogger(__name__)
 
+    def updatejob(self, job):
+        self.putjob(job)
+        return True
     
     def putjob(self, job):
         self.db.hset(job.state.id, 'job', job)

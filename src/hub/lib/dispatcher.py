@@ -93,6 +93,9 @@ class Dispatcher():
         
         self.db(self.databaseHost,self.databasePort,self.databaseInstance).putjob(job)
         
+    def _update_job(self, job):
+        self.db(self.databaseHost,self.databasePort,self.databaseInstance).updatejob(job)
+        
     def _retreive_job(self, job_id):
         
         job = self.db(self.databaseHost,self.databasePort,self.databaseInstance).getjob(job_id)
@@ -126,18 +129,6 @@ class Dispatcher():
             self.log.error(msg)
             raise error.MessagingError(msg, e)
 
-    def _register_job(self, job):
-        '''
-        Register job with dispatcher
-        '''
-        self.registered_jobs[job.state.id] = job
-        return self.registered_jobs
-
-    def _deregister_job(self, job):
-        '''
-        Register job with dispatcher
-        '''
-        self.registered_jobs.pop(job.state.id)
 
     def _start_next_task(self, job):
         tasks_to_run = job.get_next_tasks_to_run()
@@ -149,11 +140,10 @@ class Dispatcher():
                 job.update_output()
             self.log.info('No more tasks to run for job {0}'.format(
                 job.state.name))
-            self.log.debug('Persisting job {0} to DB and deregistering'.format(
+            self.log.debug('Updating job {0} in DB'.format(
                 job.state.name))
-            self._persist_job(job)
+            self._update_job(job)
             # DONE Will activate this once DB persistence layer exists
-            self._deregister_job(job)
             self.log.info('Job {0} completed. Status: {1}, Output: {2}'.format(
                           job.state.id, job.state.status, job.state.output))
 
@@ -168,6 +158,9 @@ class Dispatcher():
                 self.log.debug("Task {0} timeout in {1}".format(task.state.id,str(task.state.timeout)))
                 threading.Timer(task.state.timeout, self._caretaker).start()
             self.publish_task(task.state.save())
+            #Now we've decided what to do NEXT with the Job lets update the DB
+            self.log.debug("Updating to DB job: ".format(job.state.id))
+            self._update_job(job)
 
     def get_job(self, ch, method, properties, jobid):
         '''
@@ -183,17 +176,11 @@ class Dispatcher():
                 jobs[id] = str(job.save())
             msg = str(jobs)
         else:
-            try:
-                job = self.registered_jobs[jobid]
-                msg = str(job.save())
-            except KeyError:
+            job = self._retreive_job(jobid)
+            if job is not None:
+                msg = job
+            else:
                 msg = 'Job %s not found' % jobid
-                #so let's check the database
-                job = self._retreive_job(jobid)
-                if job is not None:
-                    msg = job
-                else:
-                    msg = 'Job %s not found' % jobid
 
         # Return job to client
         self.log.info('Returning msg {0}'.format(msg))
@@ -210,8 +197,9 @@ class Dispatcher():
         # Create a Job instance from the job record
         job = Job().load(jobrecord)
         # Register the job with the dispatcher
-        self._register_job(job)
-        self.log.info('Registered job: {0}'.format(job.state.id))
+        #self._register_job(job)
+        self._persist_job(job)
+        self.log.info('Registered job: {0} in DB'.format(job.state.id))
         # Return registration success message to client
         _prop = pika.BasicProperties(correlation_id=properties.correlation_id)
         self.channel.basic_publish(exchange='',
@@ -234,6 +222,9 @@ class Dispatcher():
                 self.log.debug("Task {0} timeout in {1}".format(task.state.id,str(task.state.timeout)))
                 threading.Timer(task.state.timeout, self._caretaker).start()
             self.publish_task(task.state.save())
+        #Now we've decided what to do with Job lets update the DB
+        self.log.debug("Updating to DB job: {0}".format(job.state.id))
+        self._update_job(job)
 
     def publish_task(self, task):
         '''
@@ -254,26 +245,14 @@ class Dispatcher():
             'Received task results for job {0}'.format(
                 properties.correlation_id))
         # Check if task is registered to this dispatcher
-        if properties.correlation_id in self.registered_jobs:
-            self.log.info('Task results: {0}'.format(taskrecord))
-            # Turn the taskrecord into a project Task instance
-            updated_task = Task().load(taskrecord)
-            # Get the related Job for this task
-            job = self.registered_jobs[updated_task.state.parent_id]
-            # Update the job with the new task results
-            job.update_tasks(updated_task, force=True)
-            self._start_next_task(job)
-        elif self._retreive_job(properties.correlation_id) is not None:
+        if self._retreive_job(properties.correlation_id) is not None:
             # Re-Register the job with the dispatcher
             jobrecord = self._retreive_job(properties.correlation_id)
             job = Job().load(jobrecord)
-            self._register_job(job)
-            self.log.info('Found in DB so Re-Registered job: {0}'.format(job.state.id))
+            self.log.info('Found job in DB: {0}'.format(job.state.id))
             self.log.info('Task results: {0}'.format(taskrecord))
             # Turn the taskrecord into a project Task instance
-            updated_task = Task().load(taskrecord)
-            # Get the related Job for this task
-            job = self.registered_jobs[updated_task.state.parent_id]
+            updated_task = Task().load(taskrecord)            
             # Update the job with the new task results
             job.update_tasks(updated_task, force=True)
             self._start_next_task(job)
@@ -282,39 +261,25 @@ class Dispatcher():
             # Turn the taskrecord into a project Task instance
             updated_task = Task().load(taskrecord)
             number_of_updated_tasks = 0
-            for job_id in self.registered_jobs:
-                job = self.registered_jobs[job_id]
+            jobid = self._retreive_jobid(updated_task.state.id)
+            jobrecord = self._retreive_job(jobid)
+            if jobrecord is not None:
+                job = Job().load(jobrecord)
+                self.log.info('Found in DB job: {0}'.format(job.state.id))
                 for task in job.state.tasks:
                     if updated_task.state.id == task.state.id:
                         job.update_tasks(updated_task)
                         number_of_updated_tasks += 1
                         self._start_next_task(job)
-            if number_of_updated_tasks == 0:
-                self.log.warn('Task with id {0} not found in any registered job now check DB'.format(
-                              updated_task.state.id))
-                jobid = self._retreive_jobid(updated_task.state.id)
-                jobrecord = self._retreive_job(jobid)
-                if jobrecord is not None:
-                    job = Job().load(jobrecord)
-                    # Re-Register the job with the dispatcher
-                    self._register_job(job)
-                    self.log.info('Found in DB so Re-Registered job: {0}'.format(job.state.id))
-                    for task in job.state.tasks:
-                        if updated_task.state.id == task.state.id:
-                            job.update_tasks(updated_task)
-                            number_of_updated_tasks += 1
-                            self._start_next_task(job)
-                    if number_of_updated_tasks == 0:
-                        self.log.warn('Task with id {0} not found in ANY job'.format(
+                if number_of_updated_tasks == 0:
+                    self.log.warn('Task with id {0} not found in its parent job (possible?)'.format(
+                                  updated_task.state.id))
+            else:
+                self.log.warn('No parent job found for Task with id {0}'.format(
                                       updated_task.state.id))
-                        self._deregister_job(job)
-                else:
-                    self.log.warn('Task with id {0} not found in ANY job'.format(
-                                      updated_task.state.id))
-
         else:
-            self.log.warn('Discarding task results for unknown job {0}'.format(
-                          properties.correlation_id))
+            self.log.warn('No job found for job ID: {0}'.format(properties.correlation_id))
+
 
 if __name__ == '__main__':
     '''
