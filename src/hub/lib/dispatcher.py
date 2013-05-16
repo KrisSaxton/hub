@@ -70,13 +70,11 @@ class Dispatcher():
         self.log.info("Caretaker Running...")
         dbI=self.db(self.databaseHost,self.databasePort,self.databaseInstance)
         incomplete = dbI.getincompletetasks()
-        self.log.info(str(incomplete))
         for task_id in incomplete:
             jobid = dbI.getjobid(task_id)
             jobrecord = dbI.getjob(jobid)
             #TODO get task record not job record
             job = Job().load(jobrecord)
-            self.log.info(str(task_id))
             for task in job.state.tasks:
                 if task.state.id == task_id and task.state.timeout and task.state.start_time:
                     if task.state.timeout < (time.time() - task.state.start_time):
@@ -86,7 +84,7 @@ class Dispatcher():
                         job.state.status = 'FAILED'
                         job.state.end_time = time.time()                        
                         job.save()
-                        dbI.putjob(job)
+                        dbI.updatejob(job)
         self.ct_lock.release()            
 
     def _persist_job(self, job):
@@ -114,12 +112,13 @@ class Dispatcher():
             self.channel.queue_declare(queue='hub_jobs')
             self.channel.queue_declare(queue='hub_status')
             self.channel.queue_declare(queue='hub_results')
-            self.channel.basic_consume(self.process_jobs,
-                                       queue='hub_jobs', no_ack=True)
-            self.channel.basic_consume(self.process_results,
-                                       queue='hub_results', no_ack=True)
             self.channel.basic_consume(self.get_job,
                                        queue='hub_status', no_ack=True)
+            self.channel.basic_consume(self.process_results,
+                                       queue='hub_results', no_ack=True)
+            self.channel.basic_consume(self.process_jobs,
+                                       queue='hub_jobs', no_ack=True)
+
             self.log.info(
                 'Starting dispatcher, listening for jobs and results...')
             self.channel.start_consuming()
