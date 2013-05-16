@@ -37,7 +37,7 @@ class HubRedis(HubDatabase):
             self.db.hset(task.state.id, 'task', task)
             for k, v in task.state._state.iteritems():
                 self.db.hset(task.state.id, k, v)
-                if k == "status" and v not in ['SUCCESS', 'FAILED']:
+                if k == "status" and v not in ['SUCCESS', 'FAILED', 'PENDING']:
                     self.db.sadd('INCOMPLETE', task.state.id)
                 elif k == "status":
                     self.log.debug("Removing task {0} from INCOMPLETE".format(task.state.id))
@@ -52,7 +52,6 @@ class HubRedis(HubDatabase):
     
     def getjob(self, jobid):
         ret = self.db.hget(jobid, 'job')
-        self.log.info(ret)
         return ret
     
     def gettask(self, taskid):
@@ -87,7 +86,6 @@ class HubSqlite(HubDatabase):
     
     def putjob(self,job):
         for task in job.state.tasks:
-            self.log.info(str(task))
             keys = []
             values =[]
             for k, v in task.state._state.iteritems():
@@ -95,30 +93,43 @@ class HubSqlite(HubDatabase):
                 values.append(json.dumps(v))
             columns = ', '.join(task.state._state.keys())
             qmarks = ', '.join('?' * len(task.state._state))
-#            values = "\""
-            
-#            values += "\""
+
             qry = "INSERT INTO hub_tasks ({0}) VALUES ({1})".format(columns,qmarks)
-            self.log.info(qry)
-            self.log.info(tuple(values))
             self.db.execute(qry, tuple(values))
         keys = []
-        job.state._state.pop('tasks')
+        tasks = job.state._state.pop('tasks')
         values=[]
         for k, v in job.state._state.iteritems():
             keys.append(str(k))
             values.append(json.dumps(v))
         columns = ', '.join(job.state._state.keys())
         qmarks = ', '.join('?' * len(job.state._state))
-#        values = "\""
-#        values += '", "'.join(str(v) for v in job.state._state.values())
-#        values += "\""
-#        self.log.info(type(job.state._state))
-#        self.log.info(keys)
-#        self.log.info(values)
+        job.state._state['tasks'] = tasks
         qry = "INSERT INTO hub_jobs ({0}) VALUES ({1})".format(columns,qmarks)
-        self.log.info(qry)
-        self.log.info(tuple(values))
+        self.db.execute(qry, tuple(values))
+        self.conn.commit()
+        
+    def updatejob(self,job):
+        for task in job.state.tasks:
+            keys = []
+            values =[]
+            for k, v in task.state._state.iteritems():
+                keys.append(str(k))
+                values.append(json.dumps(v))
+            columns = '=?,'.join(task.state._state.keys()) + '=?'
+            qry = "UPDATE hub_tasks SET {0} WHERE id=?".format(columns)
+            values.append(json.dumps(task.state.id))
+            self.db.execute(qry, tuple(values))
+        keys = []
+        tasks = job.state._state.pop('tasks')
+        values=[]
+        for k, v in job.state._state.iteritems():
+            keys.append(str(k))
+            values.append(json.dumps(v))
+        columns = '=?,'.join(job.state._state.keys()) + '=?'
+        job.state._state['tasks'] = tasks
+        qry = "UPDATE hub_jobs SET {0} WHERE id=?".format(columns)
+        values.append(json.dumps(job.state.id))
         self.db.execute(qry, tuple(values))
         self.conn.commit()
 
@@ -154,15 +165,21 @@ class HubSqlite(HubDatabase):
                 job[k]=json.loads(v.encode())
             job['tasks'] = tasks
             ret = json.dumps(job)
-            self.log.info(ret)
         return ret
         
     def getjobid(self, taskid):
         qry = "SELECT parent_id FROM hub_tasks WHERE id='{0}'".format(json.dumps(taskid))
         self.db.execute(qry)
         ret = json.loads(self.db.fetchone()['parent_id'])
-        
         return ret
+    
+    def getincompletetasks(self):
+        qry = "SELECT id FROM hub_tasks WHERE status='\"SUBMITTED\"' or status='\"RUNNING\"'"
+        ret = []
+        for row in self.db.execute(qry):
+            ret.append(json.loads(row['id']))
+        return ret
+
 #        for k, v in job.state._state.iteritems():
 #            self.log.info('k: {0}, v: {1}'.format(k,v))
 #            if k == 'tasks':
