@@ -6,6 +6,7 @@ This is the Hub worker which processes tasks on behalf of the dispatcher.
 import os
 import sys
 import logging
+import zmq
 
 # own modules
 import hub.lib.error as error
@@ -83,23 +84,20 @@ class Worker():
 
     def start(self, broker):
         self.broker = broker
-        # Setup connection to broker and declare the work queue
-        try:
-            self.log.info('Starting worker, waiting for tasks...')
-            self.conn = pika.BlockingConnection(pika.ConnectionParameters(
-                                                host=self.broker))
-            self.channel = self.conn.channel()
-            self.channel.queue_declare(queue='hub_tasks')
-            self.channel.basic_consume(self.run,
-                                       queue='hub_tasks', no_ack=True)
-            self.channel.start_consuming()
-        except pika.exceptions.AMQPConnectionError, e:
-            self.log.exception(e)
-            msg = ('Problem connectting to broker {0}'.format(self.broker))
-            self.log.error(msg)
-            raise error.MessagingError(msg, e)
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.REP)
+        self.socket.connect("tcp://{0}:5560".format(broker))
+        while True:
+            message = self.socket.recv()
+            if message == "None":
+                self.log.info('Received NONE')
+                self.socket.send("None")
+            else:
+                self.run(message)
+            #Do the task resulting in something like...
+       
 
-    def run(self, ch, method, properties, taskrecord):
+    def run(self, taskrecord):
         '''
         Checks task name for matching module and class,
         instanciates and calls run method with task args
@@ -116,17 +114,8 @@ class Worker():
 
     def post_result(self, task):
         '''Post task results into the results queue.'''
-        conn = pika.BlockingConnection(pika.ConnectionParameters(
-                                       host=self.broker))
-        channel = conn.channel()
-        self.log.debug('Sending task results for job {0} to dispatcher'.format(
-                       task.state.parent_id))
-        channel.basic_publish(exchange='',
-                              routing_key='hub_results',
-                              properties=pika.BasicProperties(
-                              correlation_id=str(task.state.parent_id),
-                              content_type='application/json',),
-                              body=task.save())
+        taskrecord = task.save()
+        self.socket.send(taskrecord)
 
 if __name__ == '__main__':
     '''

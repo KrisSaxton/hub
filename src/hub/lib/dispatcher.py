@@ -9,6 +9,7 @@ import logging
 import traceback
 import time
 import threading
+import zmq
 
 # own modules
 import hub.lib.error as error
@@ -104,29 +105,94 @@ class Dispatcher():
         return jobid
 
     def start(self, broker):
-        self.broker = broker
-        try:
-            self.conn = pika.BlockingConnection(pika.ConnectionParameters(
-                                                host=self.broker))
-            self.channel = self.conn.channel()
-            self.channel.queue_declare(queue='hub_jobs')
-            self.channel.queue_declare(queue='hub_status')
-            self.channel.queue_declare(queue='hub_results')
-            self.channel.basic_consume(self.get_job,
-                                       queue='hub_status', no_ack=True)
-            self.channel.basic_consume(self.process_results,
-                                       queue='hub_results', no_ack=True)
-            self.channel.basic_consume(self.process_jobs,
-                                       queue='hub_jobs', no_ack=True)
+        self.log.info('Starting dispatcher, listening for jobs and results...')
+        self.context = zmq.Context()
+        self.frontend = self.context.socket(zmq.ROUTER)
+        self.backend = self.context.socket(zmq.DEALER)
+        self.frontend.bind("tcp://*:5559")
+        self.backend.bind("tcp://*:5560")
+        
+        # Initialize poll set
+        self.poller = zmq.Poller()
+        self.poller.register(self.frontend, zmq.POLLIN)
+        self.poller.register(self.backend, zmq.POLLIN)
+        
+        # Switch messages between sockets
+        msgs = []
+        while True:
+            self.socks = dict(self.poller.poll())
+        
+            if self.socks.get(self.frontend) == zmq.POLLIN:
+                message = self.frontend.recv()
+                more = self.frontend.getsockopt(zmq.RCVMORE)
+                if more:
+                    msgs.append(message)
+                else:
+                    incoming = json.loads(message)
+                    for msg in msgs:
+                        if incoming['key'] == 'status':
+                            self.frontend.send(msg, zmq.SNDMORE)
+                        elif incoming['key'] == 'task_update':
+                            self.backend.send(msg, zmq.SNDMORE)                            
+                        elif incoming['key'] == 'job':
+                            self.log.info(msg)
+                            self.frontend.send(msg, zmq.SNDMORE)
+                            self.backend.send(msg, zmq.SNDMORE)
+                    if incoming['key'] == 'status':
+                        #Do something to find the job resulting in...
+                        jobid = incoming['data']['id']
+                        job = self.get_job(jobid)
+                        self.frontend.send(job)
+                    elif incoming['key'] == 'task_update':
+                        #Do something to find the job resulting in...
+                        task = incoming['data']
+                        self.process_results(json.dumps(task), fromWorker=False)
+                    elif incoming['key'] == 'job':
+                        #Do something with the job resulting in...
+                        job = incoming['data']
+                        self.process_jobs(json.dumps(job))
+                    msgs = []
+        
+            if self.socks.get(self.backend) == zmq.POLLIN:
+                message = self.backend.recv()
+                self.log.info('Receiving from worker: {0}'.format(message))
+                more = self.backend.getsockopt(zmq.RCVMORE)
+                msgs =[]
+                if more:
+                    msgs.append(message)
 
-            self.log.info(
-                'Starting dispatcher, listening for jobs and results...')
-            self.channel.start_consuming()
-        except pika.exceptions.AMQPConnectionError, e:
-            self.log.exception(e)
-            msg = ('Problem connectting to broker {0}'.format(self.broker))
-            self.log.error(msg)
-            raise error.MessagingError(msg, e)
+                else:
+                    if message == "None":
+                        pass
+                    else:
+                        for msg in msgs:
+                            self.backend.send(message, zmq.SNDMORE)                
+                        print 'If it comes from a worker it must be task results'
+                        self.process_results(message, fromWorker=True)
+
+#        self.broker = broker
+#        try:
+#            self.conn = pika.BlockingConnection(pika.ConnectionParameters(
+#                                                host=self.broker))
+#            self.channel = self.conn.channel()
+#            self.channel.queue_declare(queue='hub_jobs')
+#            self.channel.queue_declare(queue='hub_status')
+#            self.channel.queue_declare(queue='hub_results')
+#            self.channel.basic_consume(self.get_job,
+#                                       queue='hub_status', no_ack=True)
+#            self.channel.basic_consume(self.process_results,
+#                                       queue='hub_results', no_ack=True)
+#            self.channel.basic_consume(self.process_jobs,
+#                                       queue='hub_jobs', no_ack=True)
+#
+#            self.log.info(
+#                'Starting dispatcher, listening for jobs and results...')
+#            self.channel.start_consuming()
+#        except pika.exceptions.AMQPConnectionError, e:
+#            self.log.exception(e)
+#            msg = ('Problem connectting to broker {0}'.format(self.broker))
+#            self.log.error(msg)
+#            raise error.MessagingError(msg, e)
 
 
     def _start_next_task(self, job):
@@ -145,6 +211,7 @@ class Dispatcher():
             # DONE Will activate this once DB persistence layer exists
             self.log.info('Job {0} completed. Status: {1}, Output: {2}'.format(
                           job.state.id, job.state.status, job.state.output))
+            self.backend.send("None")
 
         for task in tasks_to_run:
             # Sub tagged inputs with the associated results of completed tasks
@@ -161,13 +228,12 @@ class Dispatcher():
             self.log.debug("Updating to DB job: ".format(job.state.id))
             self._update_job(job)
 
-    def get_job(self, ch, method, properties, jobid):
+    def get_job(self, jobid):
         '''
         Work out dependancies and order
         '''
-        # Load the jobid from the JSON object
         self.log.info('Received status request for job {0}'.format(jobid))
-        jobid = json.loads(jobid)
+#        jobid = json.loads(jobid)
         # Get the job from the store of registered jobs
         jobs = dict()
         if jobid == 'all':
@@ -179,17 +245,11 @@ class Dispatcher():
             if job is not None:
                 msg = job
             else:
-                msg = 'Job %s not found' % jobid
-
+                msg = str('Job %s not found' % jobid)
         # Return job to client
-        self.log.info('Returning msg {0}'.format(msg))
-        _prop = pika.BasicProperties(correlation_id=properties.correlation_id)
-        self.channel.basic_publish(exchange='',
-                                   routing_key=properties.reply_to,
-                                   properties=_prop,
-                                   body=msg)
+        return msg
 
-    def process_jobs(self, ch, method, properties, jobrecord):
+    def process_jobs(self, jobrecord):
         '''
         Work out dependancies and order
         '''
@@ -199,12 +259,9 @@ class Dispatcher():
         #self._register_job(job)
         self._persist_job(job)
         self.log.info('Registered job: {0} in DB'.format(job.state.id))
-        # Return registration success message to client
-        _prop = pika.BasicProperties(correlation_id=properties.correlation_id)
-        self.channel.basic_publish(exchange='',
-                                   routing_key=properties.reply_to,
-                                   properties=_prop,
-                                   body=str(job.state.id))
+        print 'ACKing the job'
+        self.frontend.send(json.dumps(job.state.id)) 
+
 
         # Work out the first tasks to run
         self.log.debug('Decomposing job; calculating first tasks to run')
@@ -230,32 +287,33 @@ class Dispatcher():
         Publish tasks to the work queue
         '''
         self.log.info('Publishing task {0} to the work queue'.format(task))
-        _prop = pika.BasicProperties(content_type='application/json',)
-        self.channel.basic_publish(exchange='',
-                                   routing_key='hub_tasks',
-                                   properties=_prop,
-                                   body=task)
+        self.backend.send(task)
 
-    def process_results(self, ch, method, properties, taskrecord):
+    def process_results(self, taskrecord, fromWorker=False):
         '''
         Processing results received from workers and end points
         '''
-        self.log.info(
-            'Received task results for job {0}'.format(
-                properties.correlation_id))
+
         # Check if task is registered to this dispatcher
-        if self._retreive_job(properties.correlation_id) is not None:
-            # Re-Register the job with the dispatcher
-            jobrecord = self._retreive_job(properties.correlation_id)
-            job = Job().load(jobrecord)
-            self.log.info('Found job in DB: {0}'.format(job.state.id))
-            self.log.info('Task results: {0}'.format(taskrecord))
-            # Turn the taskrecord into a project Task instance
-            updated_task = Task().load(taskrecord)            
-            # Update the job with the new task results
-            job.update_tasks(updated_task, force=True)
-            self._start_next_task(job)
-        elif properties.correlation_id == 'update_task':
+        if fromWorker:
+            jobid = json.loads(taskrecord)['parent_id']
+            self.log.info(
+            'Received task results for job {0}'.format(
+                jobid))
+            jobrecord = self._retreive_job(jobid)
+            if jobrecord is None:
+                self.log.warn('No parent job found with id {0}'.format(
+                                      jobid))
+            else:
+                job = Job().load(jobrecord)
+                self.log.info('Found job in DB: {0}'.format(job.state.id))
+                self.log.info('Task results: {0}'.format(taskrecord))
+                # Turn the taskrecord into a project Task instance
+                updated_task = Task().load(taskrecord)            
+                # Update the job with the new task results
+                job.update_tasks(updated_task, force=True)
+                self._start_next_task(job)
+        else:
             self.log.info('Task results: {0}'.format(taskrecord))
             # Turn the taskrecord into a project Task instance
             updated_task = Task().load(taskrecord)
@@ -276,8 +334,7 @@ class Dispatcher():
             else:
                 self.log.warn('No parent job found for Task with id {0}'.format(
                                       updated_task.state.id))
-        else:
-            self.log.warn('No job found for job ID: {0}'.format(properties.correlation_id))
+       
 
 
 if __name__ == '__main__':
