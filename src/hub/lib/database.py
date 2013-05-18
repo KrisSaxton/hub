@@ -170,7 +170,11 @@ class HubSqlite(HubDatabase):
     def getjobid(self, taskid):
         qry = "SELECT parent_id FROM hub_tasks WHERE id='{0}'".format(json.dumps(taskid))
         self.db.execute(qry)
-        ret = json.loads(self.db.fetchone()['parent_id'])
+        rec = self.db.fetchone()
+        if rec is None:
+            ret = None
+        else:
+            ret = json.loads(rec['parent_id'])
         return ret
     
     def getincompletetasks(self):
