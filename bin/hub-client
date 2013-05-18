@@ -118,10 +118,11 @@ Examples:
                     print "Task {0} completed in {1}s".format(task['name'],str((task['end_time']-task['start_time'])) )
                 except KeyError:
                     pass
+            jobrec = json.dumps(jobrec, indent=4)
         except ValueError:
             jobrec = response
         print ""
-        log.info(pprint.pformat(jobrec))
+        print(jobrec)
         #log.info(response)
     elif options.update:
         task = ''
