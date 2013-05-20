@@ -101,11 +101,9 @@ class Worker():
         self.log.info('Received task: {0}'.format(taskrecord))
         record = json.loads(taskrecord)
         for module in self.modules:
-            self.log.info("MMB: {0}:{1}".format(record['name'],module.__name__))
             if module.__name__ == record['name']:
                 self._run_task(module, record, taskrecord)
         for module in self.modules:
-            self.log.info("MMB: {0}:{1}".format(record['task_name'],module.__name__))
             if module.__name__ == record['task_name'] and \
                     module.__name__ != record['name']:
                 self._run_task(module, record, taskrecord)
