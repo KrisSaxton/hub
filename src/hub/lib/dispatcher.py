@@ -159,18 +159,16 @@ class Dispatcher():
         
             if self.socks.get(self.backend) == zmq.POLLIN:
                 message = self.backend.recv()
-                self.log.info('Receiving from worker: {0}'.format(message))
                 more = self.backend.getsockopt(zmq.RCVMORE)
                 to_publish = []
                 if more:
                     msgs.append(message)
                 else:
                     to_publish = self.process_results(message, fromWorker=True)
-                    self.log.info(to_publish)
                     for publish in to_publish:
-                        self.log.info(msgs)
                         for msg in msgs:
-                            self.backend.send(msg, zmq.SNDMORE)                
+                            self.backend.send(msg, zmq.SNDMORE)
+                        self.log.info('Publishing task {0} to the work queue'.format(publish))                                            
                         self.backend.send(publish)
                     msgs = []
 
