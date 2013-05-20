@@ -129,46 +129,50 @@ class Dispatcher():
                     msgs.append(message)
                 else:
                     incoming = json.loads(message)
-                    for msg in msgs:
-                        if incoming['key'] == 'status':
-                            self.frontend.send(msg, zmq.SNDMORE)
-                        elif incoming['key'] == 'task_update':
-                            self.backend.send(msg, zmq.SNDMORE)                            
-                        elif incoming['key'] == 'job':
-                            self.log.info(msg)
-                            self.frontend.send(msg, zmq.SNDMORE)
-                            self.backend.send(msg, zmq.SNDMORE)
+                    to_reply = []
+                    to_publish = []
                     if incoming['key'] == 'status':
                         #Do something to find the job resulting in...
                         jobid = incoming['data']['id']
                         job = self.get_job(jobid)
-                        self.frontend.send(job)
+                        to_reply = [job]
+                        #self.frontend.send(job)
                     elif incoming['key'] == 'task_update':
                         #Do something to find the job resulting in...
                         task = incoming['data']
-                        self.process_results(json.dumps(task), fromWorker=False)
+                        to_publish = self.process_results(json.dumps(task), fromWorker=False)
                     elif incoming['key'] == 'job':
                         #Do something with the job resulting in...
                         job = incoming['data']
-                        self.process_jobs(json.dumps(job))
+                        result = self.process_jobs(json.dumps(job))
+                        to_publish = result[0]
+                        to_reply = [result[1]]
+                    for reply in to_reply:
+                        for msg in msgs:
+                            self.frontend.send(msg, zmq.SNDMORE)   
+                        self.frontend.send(reply)                          
+                    for publish in to_publish:
+                        for msg in msgs:
+                            self.backend.send(msg, zmq.SNDMORE)
+                        self.backend.send(publish)
                     msgs = []
         
             if self.socks.get(self.backend) == zmq.POLLIN:
                 message = self.backend.recv()
                 self.log.info('Receiving from worker: {0}'.format(message))
                 more = self.backend.getsockopt(zmq.RCVMORE)
-                msgs =[]
+                to_publish = []
                 if more:
                     msgs.append(message)
-
                 else:
-                    if message == "None":
-                        pass
-                    else:
+                    to_publish = self.process_results(message, fromWorker=True)
+                    self.log.info(to_publish)
+                    for publish in to_publish:
+                        self.log.info(msgs)
                         for msg in msgs:
-                            self.backend.send(message, zmq.SNDMORE)                
-                        print 'If it comes from a worker it must be task results'
-                        self.process_results(message, fromWorker=True)
+                            self.backend.send(msg, zmq.SNDMORE)                
+                        self.backend.send(publish)
+                    msgs = []
 
 #        self.broker = broker
 #        try:
@@ -212,7 +216,7 @@ class Dispatcher():
             self.log.info('Job {0} completed. Status: {1}, Output: {2}'.format(
                           job.state.id, job.state.status, job.state.output))
             self.backend.send("None")
-
+        ret = []
         for task in tasks_to_run:
             # Sub tagged inputs with the associated results of completed tasks
             if task.state.status != 'RUNNING' and task.state.args is not None:
@@ -223,10 +227,12 @@ class Dispatcher():
             if task.state.timeout:
                 self.log.debug("Task {0} timeout in {1}".format(task.state.id,str(task.state.timeout)))
                 threading.Timer(task.state.timeout, self._caretaker).start()
-            self.publish_task(task.state.save())
+            ret.append(task.state.save())
             #Now we've decided what to do NEXT with the Job lets update the DB
             self.log.debug("Updating to DB job: ".format(job.state.id))
             self._update_job(job)
+        return ret
+        
 
     def get_job(self, jobid):
         '''
@@ -253,14 +259,14 @@ class Dispatcher():
         '''
         Work out dependancies and order
         '''
+        ret = []
         # Create a Job instance from the job record
         job = Job().load(jobrecord)
         # Register the job with the dispatcher
         #self._register_job(job)
         self._persist_job(job)
         self.log.info('Registered job: {0} in DB'.format(job.state.id))
-        print 'ACKing the job'
-        self.frontend.send(json.dumps(job.state.id)) 
+
 
 
         # Work out the first tasks to run
@@ -277,23 +283,24 @@ class Dispatcher():
             if task.state.timeout:
                 self.log.debug("Task {0} timeout in {1}".format(task.state.id,str(task.state.timeout)))
                 threading.Timer(task.state.timeout, self._caretaker).start()
-            self.publish_task(task.state.save())
+            ret.append(task.state.save())
         #Now we've decided what to do with Job lets update the DB
         self.log.debug("Updating to DB job: {0}".format(job.state.id))
         self._update_job(job)
+        return (ret, json.dumps(job.state.id))
 
-    def publish_task(self, task):
-        '''
-        Publish tasks to the work queue
-        '''
-        self.log.info('Publishing task {0} to the work queue'.format(task))
-        self.backend.send(task)
+#    def publish_task(self, task):
+#        '''
+#        Publish tasks to the work queue
+#        '''
+#        self.log.info('Publishing task {0} to the work queue'.format(task))
+#        self.backend.send(task)
 
     def process_results(self, taskrecord, fromWorker=False):
         '''
         Processing results received from workers and end points
         '''
-
+        started_tasks = []
         # Check if task is registered to this dispatcher
         if fromWorker:
             jobid = json.loads(taskrecord)['parent_id']
@@ -312,7 +319,7 @@ class Dispatcher():
                 updated_task = Task().load(taskrecord)            
                 # Update the job with the new task results
                 job.update_tasks(updated_task, force=True)
-                self._start_next_task(job)
+                started_tasks = self._start_next_task(job)
         else:
             self.log.info('Task results: {0}'.format(taskrecord))
             # Turn the taskrecord into a project Task instance
@@ -327,7 +334,7 @@ class Dispatcher():
                     if updated_task.state.id == task.state.id:
                         job.update_tasks(updated_task)
                         number_of_updated_tasks += 1
-                        self._start_next_task(job)
+                        started_tasks = self._start_next_task(job)
                 if number_of_updated_tasks == 0:
                     self.log.warn('Task with id {0} not found in its parent job (possible?)'.format(
                                   updated_task.state.id))
@@ -335,7 +342,7 @@ class Dispatcher():
                 self.log.warn('No parent job found for Task with id {0}'.format(
                                       updated_task.state.id))
        
-
+        return started_tasks
 
 if __name__ == '__main__':
     '''

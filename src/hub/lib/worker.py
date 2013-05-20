@@ -28,7 +28,7 @@ class WorkerDaemon(Daemon):
         try:
             Worker(lib_dir).start(broker)
         except Exception, e:
-            self.log.exception(e)
+            self.log.error(e)
 
 
 class Worker():
@@ -56,7 +56,7 @@ class Worker():
                 except Exception, e:
                     self.log.warn('Failed to import task {0}'.format(
                         plugin_name))
-                    self.log.exception(e)
+                    self.log.error(e)
         self.log.debug('Active modules {0}'.format(modules))
         # TODO load plugins only as they are called?
         return modules
@@ -76,7 +76,7 @@ class Worker():
                 task.state.status = 'SUCCESS'
         except Exception, e:
             self.log.error('task {0} failed'.format(task.state.name))
-            self.log.execption(e)
+            self.log.error(e)
             task.state.status = 'FAILED'
             task.state.msg = str(e)
         finally:
@@ -89,12 +89,8 @@ class Worker():
         self.socket.connect("tcp://{0}:5560".format(broker))
         while True:
             message = self.socket.recv()
-            if message == "None":
-                self.log.info('Received NONE')
-                self.socket.send("None")
-            else:
-                self.run(message)
-            #Do the task resulting in something like...
+            self.run(message)
+            
        
 
     def run(self, taskrecord):
@@ -105,9 +101,11 @@ class Worker():
         self.log.info('Received task: {0}'.format(taskrecord))
         record = json.loads(taskrecord)
         for module in self.modules:
+            self.log.info("MMB: {0}:{1}".format(record['name'],module.__name__))
             if module.__name__ == record['name']:
                 self._run_task(module, record, taskrecord)
         for module in self.modules:
+            self.log.info("MMB: {0}:{1}".format(record['task_name'],module.__name__))
             if module.__name__ == record['task_name'] and \
                     module.__name__ != record['name']:
                 self._run_task(module, record, taskrecord)
