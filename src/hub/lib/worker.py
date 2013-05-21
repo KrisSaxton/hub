@@ -66,6 +66,8 @@ class Worker():
         kwargs = {}
         if 'args' in record:
             args = record['args']
+        #reload the module, otherwise we get weird cross-population
+        reload(module)
         task = getattr(module, module.__name__).load(taskrecord)
         self.log.info('Running task: {0}'.format(task.state.name))
         try:
