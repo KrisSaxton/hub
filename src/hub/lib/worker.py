@@ -87,11 +87,22 @@ class Worker():
     def start(self, broker):
         self.broker = broker
         self.context = zmq.Context()
-        self.socket = self.context.socket(zmq.REP)
-        self.socket.connect("tcp://{0}:5560".format(broker))
+        self.announce = self.context.socket(zmq.REQ)
+        self.job_queue = self.context.socket(zmq.DEALER)
+        
+        self.announce.connect("tcp://{0}:5561".format(broker))
+        self.job_queue.connect("tcp://{0}:5560".format(broker))
+        self.announce.send("READY")
         while True:
-            message = self.socket.recv()
-            self.run(message)
+            self.log.info('MMB')
+#            address = self.announce.recv()
+#            self.log.info(address)
+#            empty = self.announce.recv()
+#            self.log.info(empty)
+            request = self.announce.recv()
+            self.log.info(request)
+            self.run(request)
+            self.announce.send("READY")
             
        
 
@@ -113,7 +124,10 @@ class Worker():
     def post_result(self, task):
         '''Post task results into the results queue.'''
         taskrecord = task.save()
-        self.socket.send(taskrecord)
+        self.log.info(taskrecord)
+        data = {'key':'task_result', 'data':json.loads(taskrecord)}
+        res = json.dumps(data)
+        self.job_queue.send(res)
 
 if __name__ == '__main__':
     '''

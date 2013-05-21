@@ -107,71 +107,115 @@ class Dispatcher():
     def start(self, broker):
         self.log.info('Starting dispatcher, listening for jobs and results...')
         self.context = zmq.Context()
-        self.frontend = self.context.socket(zmq.ROUTER)
-        self.backend = self.context.socket(zmq.DEALER)
-        self.frontend.bind("tcp://*:5559")
-        self.backend.bind("tcp://*:5560")
+        self.status = self.context.socket(zmq.ROUTER)
+        self.job_queue = self.context.socket(zmq.ROUTER)
+        self.backend = self.context.socket(zmq.ROUTER)
+        self.status.bind("tcp://*:5559")
+        self.job_queue.bind("tcp://*:5560")
+        self.backend.bind("tcp://*:5561")
         
         # Initialize poll set
         self.poller = zmq.Poller()
-        self.poller.register(self.frontend, zmq.POLLIN)
+        self.poller.register(self.status, zmq.POLLIN)
+        self.poller.register(self.job_queue, zmq.POLLIN)
         self.poller.register(self.backend, zmq.POLLIN)
         
         # Switch messages between sockets
         msgs = []
+        workers = 0
+        workers_addr = []
         while True:
             self.socks = dict(self.poller.poll())
+            if workers > 0:
+                self.log.info("We have a worker")
+                if self.socks.get(self.job_queue) == zmq.POLLIN:
+                    message = self.job_queue.recv()
+                    more = self.job_queue.getsockopt(zmq.RCVMORE)
+                    if more:
+                        msgs.append(message)
+                    else:
+                        incoming = json.loads(message)
+                        to_reply = []
+                        to_publish = []
+
+#                        if incoming['key'] == 'status':
+#                            #Do something to find the job resulting in...
+#                            jobid = incoming['data']['id']
+#                            job = self.get_job(jobid)
+#                            to_reply = [job]
+                            #self.frontend.send(job)
+                        if incoming['key'] == 'task_update':
+                            #Do something to find the job resulting in...
+                            task = incoming['data']
+                            to_publish = self.process_results(json.dumps(task), fromWorker=False)
+                        elif incoming['key'] == 'task_result':
+                            #Do something to find the job resulting in...
+                            task = incoming['data']
+                            to_publish = self.process_results(json.dumps(task), fromWorker=True)
+                        elif incoming['key'] == 'job':
+                            #Do something with the job resulting in...
+                            job = incoming['data']
+                            result = self.process_jobs(json.dumps(job))
+                            to_publish = result[0]
+                            to_reply = [result[1]]
+                        for reply in to_reply:
+                            for msg in msgs:
+                                self.job_queue.send(msg, zmq.SNDMORE)   
+                            self.job_queue.send(reply)
+                            self.log.info(reply)
+                        if to_publish:
+                            workers -= 1
+                            worker_addr = workers_addr.pop()                          
+                        for publish in to_publish:
+
+    #                        for msg in msgs:
+    #                            self.backend.send(msg, zmq.SNDMORE)
+
+                            self.backend.send(worker_addr, zmq.SNDMORE)
+                            self.backend.send("", zmq.SNDMORE)
+                            self.backend.send(publish)
+                            self.log.info("sent to middle:{0}".format(publish))
+                        msgs = []
         
-            if self.socks.get(self.frontend) == zmq.POLLIN:
-                message = self.frontend.recv()
-                more = self.frontend.getsockopt(zmq.RCVMORE)
+            if self.socks.get(self.backend) == zmq.POLLIN:
+                addr = self.backend.recv()
+                empty = self.backend.recv()
+                message = self.backend.recv()
+                self.log.info("worker announce:{0}".format(message))
+                if message == "READY":
+                    workers+=1
+                    workers_addr.append(addr)
+#                    self.backend.send(addr, zmq.SNDMORE)
+#                    self.backend.send("", zmq.SNDMORE)
+#                    self.backend.send("OK")
+                    
+                    
+#                    
+#                    to_publish = self.process_results(message, fromWorker=True)
+#                    for publish in to_publish:
+#                        for msg in msgs:
+#                            self.backend.send(msg, zmq.SNDMORE)
+#                        self.log.info('Publishing task {0} to the work queue'.format(publish))                                            
+#                        self.backend.send(publish)
+#                    msgs = []
+
+            if self.socks.get(self.status) == zmq.POLLIN:
+                message = self.status.recv()
+                more = self.status.getsockopt(zmq.RCVMORE)
                 if more:
                     msgs.append(message)
                 else:
                     incoming = json.loads(message)
                     to_reply = []
-                    to_publish = []
                     if incoming['key'] == 'status':
                         #Do something to find the job resulting in...
                         jobid = incoming['data']['id']
                         job = self.get_job(jobid)
                         to_reply = [job]
-                        #self.frontend.send(job)
-                    elif incoming['key'] == 'task_update':
-                        #Do something to find the job resulting in...
-                        task = incoming['data']
-                        to_publish = self.process_results(json.dumps(task), fromWorker=False)
-                    elif incoming['key'] == 'job':
-                        #Do something with the job resulting in...
-                        job = incoming['data']
-                        result = self.process_jobs(json.dumps(job))
-                        to_publish = result[0]
-                        to_reply = [result[1]]
-                    for reply in to_reply:
-                        for msg in msgs:
-                            self.frontend.send(msg, zmq.SNDMORE)   
-                        self.frontend.send(reply)                          
-                    for publish in to_publish:
-                        for msg in msgs:
-                            self.backend.send(msg, zmq.SNDMORE)
-                        self.backend.send(publish)
-                    msgs = []
-        
-            if self.socks.get(self.backend) == zmq.POLLIN:
-                message = self.backend.recv()
-                more = self.backend.getsockopt(zmq.RCVMORE)
-                to_publish = []
-                if more:
-                    msgs.append(message)
-                else:
-                    to_publish = self.process_results(message, fromWorker=True)
-                    for publish in to_publish:
-                        for msg in msgs:
-                            self.backend.send(msg, zmq.SNDMORE)
-                        self.log.info('Publishing task {0} to the work queue'.format(publish))                                            
-                        self.backend.send(publish)
-                    msgs = []
-
+                        for reply in to_reply:
+                            for msg in msgs:
+                                self.status.send(msg, zmq.SNDMORE)   
+                            self.status.send(reply)                    
 #        self.broker = broker
 #        try:
 #            self.conn = pika.BlockingConnection(pika.ConnectionParameters(

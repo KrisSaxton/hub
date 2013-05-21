@@ -17,8 +17,10 @@ class Client(object):
         self.broker = broker
         self.log = logging.getLogger(__name__)
         self.context = zmq.Context()
-        self.socket = self.context.socket(zmq.REQ)
-        self.socket.connect("tcp://{0}:5559".format(broker))
+        self.status = self.context.socket(zmq.REQ)
+        self.status.connect("tcp://{0}:5559".format(broker))
+        self.job_q = self.context.socket(zmq.REQ)
+        self.job_q.connect("tcp://{0}:5560".format(broker))        
 
 
     def _post(self, jobid, request_type, blocking=True, taskdata=None,
@@ -26,28 +28,35 @@ class Client(object):
         '''
         Send job to messaging system
         '''
+        self.response = None
         if request_type is 'create':
             self.routing_key = 'job'
             job = json.loads(job)
             req = {'key':'job', 'data': job}
             self.body = json.dumps(req)
+            self.job_q.send(self.body)
+            if blocking is True:
+                self.response = self.job_q.recv()
+            return str(self.response)
         elif request_type is 'update':
             self.routing_key = 'task_update'
             taskdata = json.loads(taskdata)
             req = {'key':'task_update', 'data': taskdata}
             self.body = json.dumps(req)
+            self.job_q.send(self.body)
         elif request_type is 'get':
             self.routing_key = 'status'
             req = {'key':'status', 'data': {'id': jobid}}
             self.body = json.dumps(req)
+            self.status.send(self.body)
 
-        self.response = None
 
-        self.socket.send(self.body)
+
+#        self.socket.send(self.body)
         
-        if blocking is True:
-            self.response = self.socket.recv()
-        return str(self.response)
+            if blocking is True:
+                self.response = self.status.recv()
+            return str(self.response)
 
     def create(self, job):
         '''
