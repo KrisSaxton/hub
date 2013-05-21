@@ -139,23 +139,13 @@ class Dispatcher():
                     incoming = json.loads(message)
                     to_reply = []
                     to_publish = []
-
-#                        if incoming['key'] == 'status':
-#                            #Do something to find the job resulting in...
-#                            jobid = incoming['data']['id']
-#                            job = self.get_job(jobid)
-#                            to_reply = [job]
-                        #self.frontend.send(job)
                     if incoming['key'] == 'task_update':
-                        #Do something to find the job resulting in...
                         task = incoming['data']
                         to_publish = self.process_results(json.dumps(task), fromWorker=False)
                     elif incoming['key'] == 'task_result':
-                        #Do something to find the job resulting in...
                         task = incoming['data']
                         to_publish = self.process_results(json.dumps(task), fromWorker=True)
                     elif incoming['key'] == 'job':
-                        #Do something with the job resulting in...
                         job = incoming['data']
                         result = self.process_jobs(json.dumps(job))
                         to_publish = result[0]
@@ -163,8 +153,7 @@ class Dispatcher():
                     for reply in to_reply:
                         for msg in msgs:
                             self.job_queue.send(msg, zmq.SNDMORE)   
-                        self.job_queue.send(reply)
-                                             
+                        self.job_queue.send(reply)        
                     for publish in to_publish:
                         self.job_queue.send("TASK_Q",zmq.SNDMORE)
                         self.job_queue.send("",zmq.SNDMORE)
@@ -192,7 +181,6 @@ class Dispatcher():
                     workers+=1
                     workers_addr.append(addr)
 
-
             if self.socks.get(self.status) == zmq.POLLIN:
                 message = self.status.recv()
                 more = self.status.getsockopt(zmq.RCVMORE)
@@ -211,30 +199,6 @@ class Dispatcher():
                                 self.status.send(msg, zmq.SNDMORE)   
                             self.status.send(reply)
                     msgs = []                  
-#        self.broker = broker
-#        try:
-#            self.conn = pika.BlockingConnection(pika.ConnectionParameters(
-#                                                host=self.broker))
-#            self.channel = self.conn.channel()
-#            self.channel.queue_declare(queue='hub_jobs')
-#            self.channel.queue_declare(queue='hub_status')
-#            self.channel.queue_declare(queue='hub_results')
-#            self.channel.basic_consume(self.get_job,
-#                                       queue='hub_status', no_ack=True)
-#            self.channel.basic_consume(self.process_results,
-#                                       queue='hub_results', no_ack=True)
-#            self.channel.basic_consume(self.process_jobs,
-#                                       queue='hub_jobs', no_ack=True)
-#
-#            self.log.info(
-#                'Starting dispatcher, listening for jobs and results...')
-#            self.channel.start_consuming()
-#        except pika.exceptions.AMQPConnectionError, e:
-#            self.log.exception(e)
-#            msg = ('Problem connectting to broker {0}'.format(self.broker))
-#            self.log.error(msg)
-#            raise error.MessagingError(msg, e)
-
 
     def _start_next_task(self, job):
         tasks_to_run = job.get_next_tasks_to_run()
@@ -249,7 +213,6 @@ class Dispatcher():
             self.log.debug('Updating job {0} in DB'.format(
                 job.state.name))
             self._update_job(job)
-            # DONE Will activate this once DB persistence layer exists
             self.log.info('Job {0} completed. Status: {1}, Output: {2}'.format(
                           job.state.id, job.state.status, job.state.output))
             self.backend.send("None")
