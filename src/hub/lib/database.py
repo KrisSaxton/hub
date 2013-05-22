@@ -40,11 +40,11 @@ class HubRedis(HubDatabase):
                 if k == "status" and v not in ['SUCCESS', 'FAILED', 'PENDING']:
                     self.db.sadd('INCOMPLETE', task.state.id)
                 elif k == "status":
-                    self.log.debug("Removing task {0} from INCOMPLETE".format(task.state.id))
+                    #self.log.debug("Removing task {0} from INCOMPLETE".format(task.state.id))
                     self.db.srem('INCOMPLETE', task.state.id)
                 #Do this so that if the parent is failed we don't keep in INCOMPLETE
                 if k =="status" and job.state.status =="FAILED":
-                    self.log.debug("Removing task {0} from INCOMPLETE".format(task.state.id))
+                    #self.log.debug("Removing task {0} from INCOMPLETE".format(task.state.id))
                     self.db.srem('INCOMPLETE', task.state.id)
                 self.db.hset(task.state.id, k, v)
                 

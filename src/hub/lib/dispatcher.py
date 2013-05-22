@@ -102,7 +102,6 @@ class Dispatcher():
         return jobid
 
     def work_q(self):
-        self.log.info("2")
         self.task_q = self.context.socket(zmq.DEALER)
         self.backend = self.context.socket(zmq.ROUTER)
         self.backend.bind("tcp://*:5561")
@@ -117,7 +116,6 @@ class Dispatcher():
         workers_addr = []
         while True:
             self.qsocks = dict(self.qpoller.poll())
-            self.log.info("3")
             if workers > 0:
                 if self.qsocks.get(self.task_q) == zmq.POLLIN:
                     blank = self.task_q.recv()
@@ -151,11 +149,8 @@ class Dispatcher():
         self.poller = zmq.Poller()
         self.poller.register(self.status, zmq.POLLIN)
         self.poller.register(self.job_queue, zmq.POLLIN)
-        self.log.info("0")
         qthread = threading.Thread(target=self.work_q)
-        self.log.info("1")
         qthread.start()
-        self.log.info("MMB")
         # Switch messages between sockets
         msgs = []
         while True:
