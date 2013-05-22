@@ -101,30 +101,63 @@ class Dispatcher():
         jobid = self.db(self.databaseHost,self.databasePort,self.databaseInstance).getjobid(task_id)
         return jobid
 
+    def work_q(self):
+        self.log.info("2")
+        self.task_q = self.context.socket(zmq.DEALER)
+        self.backend = self.context.socket(zmq.ROUTER)
+        self.backend.bind("tcp://*:5561")
+        self.task_q.setsockopt(zmq.IDENTITY, "TASK_Q")
+        self.task_q.connect("tcp://localhost:5560")
+        
+        self.qpoller = zmq.Poller()
+        self.qpoller.register(self.backend, zmq.POLLIN)
+        self.qpoller.register(self.task_q, zmq.POLLIN)
+        
+        workers = 0
+        workers_addr = []
+        while True:
+            self.qsocks = dict(self.qpoller.poll())
+            self.log.info("3")
+            if workers > 0:
+                if self.qsocks.get(self.task_q) == zmq.POLLIN:
+                    blank = self.task_q.recv()
+                    message = self.task_q.recv()
+                    workers -= 1
+                    work_addr = workers_addr.pop()
+                    self.log.info("Task {0} is being sent to worker {1}".format(message, work_addr))
+                    self.backend.send(work_addr, zmq.SNDMORE)
+                    self.backend.send("", zmq.SNDMORE)
+                    self.backend.send(message)
+
+            if self.qsocks.get(self.backend) == zmq.POLLIN:
+                addr = self.backend.recv()                    
+                empty = self.backend.recv()
+                message = self.backend.recv()
+                if message == "READY":
+                    self.log.info("Worker {0} is READY".format(addr))
+                    workers+=1
+                    workers_addr.append(addr)
+        
     def start(self, broker):
         self.log.info('Starting dispatcher, listening for jobs and results...')
         self.context = zmq.Context()
         self.status = self.context.socket(zmq.ROUTER)
         self.job_queue = self.context.socket(zmq.ROUTER)
-        self.task_q = self.context.socket(zmq.DEALER)
-        self.backend = self.context.socket(zmq.ROUTER)
         self.status.bind("tcp://*:5559")
         self.job_queue.bind("tcp://*:5560")
-        self.backend.bind("tcp://*:5561")
-        self.task_q.setsockopt(zmq.IDENTITY, "TASK_Q")
-        self.task_q.connect("tcp://localhost:5560")
+        
         
         # Initialize poll set
         self.poller = zmq.Poller()
         self.poller.register(self.status, zmq.POLLIN)
         self.poller.register(self.job_queue, zmq.POLLIN)
-        self.poller.register(self.backend, zmq.POLLIN)
-        self.poller.register(self.task_q, zmq.POLLIN)
-        
+        self.log.info("0")
+        qthread = threading.Thread(target=self.work_q)
+        self.log.info("1")
+        qthread.start()
+        self.log.info("MMB")
         # Switch messages between sockets
         msgs = []
-        workers = 0
-        workers_addr = []
         while True:
             self.socks = dict(self.poller.poll())
             if self.socks.get(self.job_queue) == zmq.POLLIN:
@@ -158,25 +191,7 @@ class Dispatcher():
                         
                     msgs = []
                         
-            if workers > 0:
-                if self.socks.get(self.task_q) == zmq.POLLIN:
-                    blank = self.task_q.recv()
-                    message = self.task_q.recv()
-                    workers -= 1
-                    work_addr = workers_addr.pop()
-                    self.log.info("Task {0} is being sent to worker {1}".format(message, work_addr))
-                    self.backend.send(work_addr, zmq.SNDMORE)
-                    self.backend.send("", zmq.SNDMORE)
-                    self.backend.send(message)
 
-            if self.socks.get(self.backend) == zmq.POLLIN:
-                addr = self.backend.recv()                    
-                empty = self.backend.recv()
-                message = self.backend.recv()
-                if message == "READY":
-                    self.log.info("Worker {0} is READY".format(addr))
-                    workers+=1
-                    workers_addr.append(addr)
 
             if self.socks.get(self.status) == zmq.POLLIN:
                 message = self.status.recv()
