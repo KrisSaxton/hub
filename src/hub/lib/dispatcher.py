@@ -60,9 +60,6 @@ class Dispatcher():
         self.databaseModule = __import__('hub.lib.database',fromlist = [self.databaseType])
         self.db = getattr(self.databaseModule, self.databaseType)
         self.ct_lock = threading.Lock()
-        
-        #threading.Thread(target=self._caretaker).start()
-        #self._caretaker()
 
     def _caretaker(self):
         self.log.info("Caretaker waiting on lock...")
@@ -215,7 +212,7 @@ class Dispatcher():
             self._update_job(job)
             self.log.info('Job {0} completed. Status: {1}, Output: {2}'.format(
                           job.state.id, job.state.status, job.state.output))
-            self.backend.send("None")
+#            self.backend.send("None")
         ret = []
         for task in tasks_to_run:
             # Sub tagged inputs with the associated results of completed tasks
@@ -239,7 +236,6 @@ class Dispatcher():
         Work out dependancies and order
         '''
         self.log.info('Received status request for job {0}'.format(jobid))
-#        jobid = json.loads(jobid)
         # Get the job from the store of registered jobs
         jobs = dict()
         if jobid == 'all':
@@ -262,13 +258,8 @@ class Dispatcher():
         ret = []
         # Create a Job instance from the job record
         job = Job().load(jobrecord)
-        # Register the job with the dispatcher
-        #self._register_job(job)
         self._persist_job(job)
         self.log.info('Registered job: {0} in DB'.format(job.state.id))
-
-
-
         # Work out the first tasks to run
         self.log.debug('Decomposing job; calculating first tasks to run')
         tasks_to_run = job.get_next_tasks_to_run()
@@ -288,13 +279,6 @@ class Dispatcher():
         self.log.debug("Updating to DB job: {0}".format(job.state.id))
         self._update_job(job)
         return (ret, json.dumps(job.state.id))
-
-#    def publish_task(self, task):
-#        '''
-#        Publish tasks to the work queue
-#        '''
-#        self.log.info('Publishing task {0} to the work queue'.format(task))
-#        self.backend.send(task)
 
     def process_results(self, taskrecord, fromWorker=False):
         '''

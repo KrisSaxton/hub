@@ -95,10 +95,6 @@ class Worker():
         self.log.info("Announcing READY")
         self.announce.send("READY")
         while True:
-#            address = self.announce.recv()
-#            self.log.info(address)
-#            empty = self.announce.recv()
-#            self.log.info(empty)
             request = self.announce.recv()
             self.run(request)
             self.log.info("Announcing READY")
