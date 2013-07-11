@@ -91,6 +91,13 @@ Examples:
             daemon.stop()
         except Exception, e:
             log.exception(e)
+    if action == 'restart':
+        log.info('Restarting worker...')
+        try:
+            daemon.restart(broker, tasks_dir)
+        except Exception, e:
+            log.exception(e)
+    
                   
 if __name__ == '__main__':
     try:
