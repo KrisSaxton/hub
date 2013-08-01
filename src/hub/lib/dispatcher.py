@@ -181,7 +181,10 @@ class Dispatcher():
                     elif incoming['key'] == 'announce':
                         worker_id = incoming['data']
                         self.log.info("Worker {0} is READY".format(worker_id))
-                        self.workers_addr.append(worker_id)
+                        if worker_id not in self.workers_addr:
+                            self.workers_addr.append(worker_id)
+                        else:
+                            self.log.info("We already thought worker {0} was ready".format(worker_id))
                     for reply in to_reply:
                         for msg in msgs:
                             self.job_queue.send(msg, zmq.SNDMORE)   
