@@ -102,39 +102,40 @@ class Dispatcher():
         return jobid
 
     def work_q(self):
+        self.newcontext = zmq.Context()
         self.task_q = self.context.socket(zmq.DEALER)
-        self.backend = self.context.socket(zmq.ROUTER)
-        self.backend.bind("tcp://*:5561")
+        self.workers = self.newcontext.socket(zmq.PUB)
+        self.workers.bind("tcp://*:5561")
         self.task_q.setsockopt(zmq.IDENTITY, "TASK_Q")
         self.task_q.connect("tcp://localhost:5560")
         
         self.qpoller = zmq.Poller()
-        self.qpoller.register(self.backend, zmq.POLLIN)
         self.qpoller.register(self.task_q, zmq.POLLIN)
         
-        workers = 0
-        workers_addr = []
+        self.workers_addr = []
+        message = 'test'
         while True:
             self.qsocks = dict(self.qpoller.poll())
-            if workers > 0:
+            if self.workers_addr:
                 if self.qsocks.get(self.task_q) == zmq.POLLIN:
                     blank = self.task_q.recv()
                     message = self.task_q.recv()
-                    workers -= 1
-                    work_addr = workers_addr.pop()
+                    work_addr = self.workers_addr.pop()
                     self.log.info("Task {0} is being sent to worker {1}".format(message, work_addr))
-                    self.backend.send(work_addr, zmq.SNDMORE)
-                    self.backend.send("", zmq.SNDMORE)
-                    self.backend.send(message)
+                    try:
+                        self.workers.send_multipart([work_addr.encode(), message])
+                    except Exception as e:
+                        self.log.info(e)
+                    self.log.info("SENT")
 
-            if self.qsocks.get(self.backend) == zmq.POLLIN:
-                addr = self.backend.recv()                    
-                empty = self.backend.recv()
-                message = self.backend.recv()
-                if message == "READY":
-                    self.log.info("Worker {0} is READY".format(addr))
-                    workers+=1
-                    workers_addr.append(addr)
+#            if self.qsocks.get(self.backend) == zmq.POLLIN:
+#                addr = self.backend.recv()                    
+#                empty = self.backend.recv()
+#                message = self.backend.recv()
+#                if message == "READY":
+#                    self.log.info("Worker {0} is READY".format(addr))
+#                    self.workers+=1
+#                    self.workers_addr.append(addr)
         
     def start(self, broker):
         self.log.info('Starting dispatcher, listening for jobs and results...')
@@ -175,6 +176,10 @@ class Dispatcher():
                         result = self.process_jobs(json.dumps(job))
                         to_publish = result[0]
                         to_reply = [result[1]]
+                    elif incoming['key'] == 'announce':
+                        worker_id = incoming['data']
+                        self.log.info("Worker {0} is READY".format(worker_id))
+                        self.workers_addr.append(worker_id)
                     for reply in to_reply:
                         for msg in msgs:
                             self.job_queue.send(msg, zmq.SNDMORE)   

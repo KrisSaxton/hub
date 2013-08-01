@@ -7,6 +7,7 @@ import os
 import sys
 import logging
 import zmq
+import time
 
 # own modules
 import hub.lib.error as error
@@ -24,9 +25,9 @@ class WorkerDaemon(Daemon):
     '''
     def run(self, *args):
         self.log = logging.getLogger(__name__)
-        (broker, lib_dir) = args
+        (broker, lib_dir, id) = args
         try:
-            Worker(lib_dir).start(broker)
+            Worker(lib_dir, id).start(broker)
         except Exception, e:
             self.log.error(e)
 
@@ -35,10 +36,11 @@ class Worker():
     '''
     Class representing workers that processes tasks.
     '''
-    def __init__(self, tasks_dir):
+    def __init__(self, tasks_dir, id):
         '''Load all worker task plugins, connect to messaging system.'''
         self.log = logging.getLogger(__name__)
         self.modules = self._load_task_modules(tasks_dir)
+        self.id = id
 
     def _load_task_modules(self, tasks_dir):
         self.tasks_dir = tasks_dir
@@ -87,19 +89,26 @@ class Worker():
     def start(self, broker):
         self.broker = broker
         self.context = zmq.Context()
-        self.announce = self.context.socket(zmq.REQ)
-        self.job_queue = self.context.socket(zmq.DEALER)
-        
-        self.announce.connect("tcp://{0}:5561".format(broker))
-        self.job_queue.connect("tcp://{0}:5560".format(broker))
+        self.jobs = self.context.socket(zmq.SUB)
+        self.return_queue = self.context.socket(zmq.DEALER)
+        self.jobs.connect("tcp://{0}:5561".format(broker))
+        self.return_queue.connect("tcp://{0}:5560".format(broker))
+        self.jobs.setsockopt(zmq.SUBSCRIBE, self.id)
+#        time.sleep(10)
         self.log.info("Announcing READY")
-        self.announce.send("READY")
+        data = {'key':'announce', 'data':str(self.id)}
+        self.log.info(json.dumps(data))
+        self.return_queue.send(json.dumps(data))
+        self.log.info("MMB")
+        #self.jobs.send("READY")
         while True:
-            request = self.announce.recv()
+            [addr, request] = self.jobs.recv_multipart()
+            self.log.info(addr)
+            self.log.info(request)
             self.run(request)
             self.log.info("Announcing READY")
-            self.announce.send("READY")
-            
+            data = {'key':'announce', 'data':self.id}
+            self.return_queue.send(json.dumps(data))            
        
 
     def run(self, taskrecord):
@@ -122,7 +131,7 @@ class Worker():
         taskrecord = task.save()
         data = {'key':'task_result', 'data':json.loads(taskrecord)}
         res = json.dumps(data)
-        self.job_queue.send(res)
+        self.return_queue.send(res)
 
 if __name__ == '__main__':
     '''
