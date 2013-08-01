@@ -94,6 +94,7 @@ class Worker():
         self.jobs.connect("tcp://{0}:5561".format(broker))
         self.return_queue.connect("tcp://{0}:5560".format(broker))
         self.jobs.setsockopt(zmq.SUBSCRIBE, self.id)
+        self.jobs.setsockopt(zmq.SUBSCRIBE, "CALL_HOME")
 #        time.sleep(10)
         self.log.info("Announcing READY")
         data = {'key':'announce', 'data':str(self.id)}
@@ -105,10 +106,17 @@ class Worker():
             [addr, request] = self.jobs.recv_multipart()
             self.log.info(addr)
             self.log.info(request)
-            self.run(request)
-            self.log.info("Announcing READY")
-            data = {'key':'announce', 'data':self.id}
-            self.return_queue.send(json.dumps(data))            
+            if request == "DISPATCHER_STARTED":
+                # the dispatcher has started we better
+                # remind it who we are...
+                self.log.info("Dispatcher restarted so announcing READY")
+                data = {'key':'announce', 'data':self.id}
+                self.return_queue.send(json.dumps(data))
+            else:
+                self.run(request)
+                self.log.info("Announcing READY")
+                data = {'key':'announce', 'data':self.id}
+                self.return_queue.send(json.dumps(data))            
        
 
     def run(self, taskrecord):

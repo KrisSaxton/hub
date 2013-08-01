@@ -113,7 +113,9 @@ class Dispatcher():
         self.qpoller.register(self.task_q, zmq.POLLIN)
         
         self.workers_addr = []
-        message = 'test'
+        time.sleep(1)
+        self.log.debug("Tell the workers to call home...")
+        self.workers.send_multipart(['CALL_HOME', 'DISPATCHER_STARTED'])
         while True:
             self.qsocks = dict(self.qpoller.poll())
             if self.workers_addr:
@@ -125,7 +127,7 @@ class Dispatcher():
                     try:
                         self.workers.send_multipart([work_addr.encode(), message])
                     except Exception as e:
-                        self.log.info(e)
+                        self.log.error(e)
                     self.log.info("SENT")
 
 #            if self.qsocks.get(self.backend) == zmq.POLLIN:
