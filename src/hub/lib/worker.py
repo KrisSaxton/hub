@@ -72,19 +72,19 @@ class Worker():
         reload(module)
         task = getattr(module, module.__name__).load(taskrecord)
         self.log.info('Running task: {0}'.format(task.state.name))
+        task.state.status = 'RUNNING'
+        self.post_result(task)
         try:
             task.state.data = task(*args, **kwargs)
-            if task.async:
-                task.state.status = 'RUNNING'
-            else:
-                task.state.status = 'SUCCESS'
         except Exception, e:
             self.log.error('task {0} failed'.format(task.state.name))
             self.log.error(e)
             task.state.status = 'FAILED'
             task.state.msg = str(e)
         finally:
-            self.post_result(task)
+            if not task.async:
+                task.state.status = 'SUCCESS'
+                self.post_result(task)
 
     def start(self, broker):
         self.broker = broker
