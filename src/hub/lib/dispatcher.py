@@ -62,16 +62,13 @@ class Dispatcher():
         self.ct_lock = threading.Lock()
         self.open_jobs=[]
 
-    def _caretaker(self, task_id):
-        self.log.info("Caretaker waiting on lock...")
-        self.ct_lock.acquire()
+    def _async_timeout(self, task_id):
         self.log.info("Caretaker Running...")
         dbI=self.db(self.databaseHost,self.databasePort,self.databaseInstance)
         jobid = dbI.getjobid(task_id)
         while jobid in self.open_jobs:
             pass
         self.open_jobs.append(jobid)
-        self.log.debug(self.open_jobs)
         jobrecord = dbI.getjob(jobid)
         job = Job().load(jobrecord)
         for task in job.state.tasks:
@@ -85,29 +82,42 @@ class Dispatcher():
                     job.save()
                     dbI.updatejob(job)
         self.open_jobs.remove(jobid)
-        self.log.debug(self.open_jobs)
-        self.ct_lock.release()
-    
+        
+    def _startup_clean(self):
+        self.log.info("Caretaker Running...")
+        dbI=self.db(self.databaseHost,self.databasePort,self.databaseInstance)
+        incomplete = dbI.getincompletetasks()
+        for task_id in incomplete:
+            jobid = dbI.getjobid(task_id)
+            while jobid in self.open_jobs:
+                pass
+            self.open_jobs.append(jobid)
+            jobrecord = dbI.getjob(jobid)
+            job = Job().load(jobrecord)
+            for task in job.state.tasks:
+                if task.state.id == task_id and task.state.timeout and task.state.start_time:
+                    if task.state.timeout < (time.time() - task.state.start_time):
+                        self.log.info("Setting task {0} from job {1} as FAILED".format(task.state.id,job.state.id))
+                        task.state.status = 'FAILED'
+                        task.state.end_time = time.time()
+                        job.state.status = 'FAILED'
+                        job.state.end_time = time.time()                        
+                        job.save()
+                        dbI.updatejob(job)
+            self.open_jobs.remove(jobid)
+        
     def _workerdeath(self, task_id, worker):
         resender = self.context.socket(zmq.DEALER)
-        resender.connect("tcp://localhost:5560")
-        
+        resender.connect("tcp://localhost:5560")        
         if task_id in self.started_jobs:
             self.log.warning("Worker {0} didn't respond, resending...".format(worker))
-            # So that worker didn't respond let's ditch it
             try:
                 self.workers_addr.remove(worker)
             except ValueError:
-                self.log.debug("MMB")
-#            self.log.info("HERE's WHERE WE RESEND")
-#            resender.send("ROUTER",zmq.SNDMORE)
-#            resender.send("",zmq.SNDMORE)
-#            resender.send("TASK_Q",zmq.SNDMORE)
-#            resender.send("",zmq.SNDMORE)
+                self.log.debug("Hmm, the worker is already gone")
             load = {'key':'resend', 'data':self.started_jobs[task_id]['task']} 
             resender.send(json.dumps(load))
             self.started_jobs.pop(task_id)
-            self.log.info("MMB")     
 
     def _persist_job(self, job):
         
@@ -172,15 +182,14 @@ class Dispatcher():
         self.job_queue = self.context.socket(zmq.ROUTER)
         self.status.bind("tcp://*:5559")
         self.job_queue.setsockopt(zmq.IDENTITY, "ROUTER")
-        self.job_queue.bind("tcp://*:5560")
-        
-        
+        self.job_queue.bind("tcp://*:5560")        
         # Initialize poll set
         self.poller = zmq.Poller()
         self.poller.register(self.status, zmq.POLLIN)
         self.poller.register(self.job_queue, zmq.POLLIN)
         qthread = threading.Thread(target=self.work_q)
         qthread.start()
+        self._startup_clean()
         # Switch messages between sockets
         msgs = []
         while True:
@@ -281,8 +290,12 @@ class Dispatcher():
             if not task.state.start_time:
                 task.state.start_time = time.time()
             if task.state.timeout:
-                self.log.debug("Task {0} timeout in {1}".format(task.state.id,str(task.state.timeout)))
-                threading.Timer(task.state.timeout, self._caretaker, args=[task.state.id]).start()
+                threading.Timer(task.state.timeout, self._async_timeout, args=[task.state.id]).start()
+            else:
+                self.log.warning("You didn't give task {0} a timeout so defaulting to 30 mins.".format(task.state.id))
+                task.state.timeout = 30 * 60
+                threading.Timer(task.state.timeout, self._async_timeout, args=[task.state.id]).start()
+            self.log.debug("Task {0} timeout in {1}s".format(task.state.id,str(task.state.timeout)))
             ret.append(task.state.save())
             #Now we've decided what to do NEXT with the Job lets update the DB
             self.log.debug("Updating to DB job: ".format(job.state.id))
@@ -331,8 +344,12 @@ class Dispatcher():
             if not task.state.start_time:
                 task.state.start_time = time.time()
             if task.state.timeout:
-                self.log.debug("Task {0} timeout in {1}".format(task.state.id,str(task.state.timeout)))
-                threading.Timer(task.state.timeout, self._caretaker, args=[task.state.id]).start()
+                threading.Timer(task.state.timeout, self._async_timeout, args=[task.state.id]).start()
+            else:
+                self.log.warning("You didn't give task {0} a timeout so defaulting to 30 mins.".format(task.state.id))
+                task.state.timeout = 30 * 60
+                threading.Timer(task.state.timeout, self._async_timeout, args=[task.state.id]).start()
+            self.log.debug("Task {0} timeout in {1}s".format(task.state.id,str(task.state.timeout)))
             ret.append(task.state.save())
         #Now we've decided what to do with Job lets update the DB
         self.log.debug("Updating to DB job: {0}".format(job.state.id))
