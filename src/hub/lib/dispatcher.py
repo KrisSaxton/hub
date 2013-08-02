@@ -63,6 +63,10 @@ class Dispatcher():
         self.open_jobs=[]
 
     def _async_timeout(self, task_id):
+        '''
+        This is run once per job in a separate thread and
+        fails any jobs past their timeout
+        '''
         dbI=self.db(self.databaseHost,self.databasePort,self.databaseInstance)
         jobid = dbI.getjobid(task_id)
         while jobid in self.open_jobs:
@@ -73,16 +77,21 @@ class Dispatcher():
         for task in job.state.tasks:
             if task.state.id == task_id and task.state.timeout and task.state.start_time:
                 if task.state.timeout < (time.time() - task.state.start_time):
-                    self.log.info("Setting task {0} from job {1} as FAILED".format(task.state.id,job.state.id))
-                    task.state.status = 'FAILED'
-                    task.state.end_time = time.time()
-                    job.state.status = 'FAILED'
-                    job.state.end_time = time.time()                        
-                    job.save()
-                    dbI.updatejob(job)
+                    if task.state.status == "RUNNING":
+                        self.log.info("Setting task {0} from job {1} as FAILED".format(task.state.id,job.state.id))
+                        task.state.status = 'FAILED'
+                        task.state.end_time = time.time()
+                        job.state.status = 'FAILED'
+                        job.state.end_time = time.time()                        
+                        job.save()
+                        dbI.updatejob(job)
         self.open_jobs.remove(jobid)
         
     def _startup_clean(self):
+        '''
+        This runs when we start and cleans up any jobs
+        that have timed out.
+        '''
         self.log.info("Cleanup running...")
         dbI=self.db(self.databaseHost,self.databasePort,self.databaseInstance)
         incomplete = dbI.getincompletetasks()
@@ -106,6 +115,11 @@ class Dispatcher():
             self.open_jobs.remove(jobid)
         
     def _workerdeath(self, task_id, worker):
+        '''
+        This runs once per task in a seperate thread to check that the
+        worker replied to tell us it's running the task
+        it will resubmit to the queue if the worker hasn't replied.
+        '''
         resender = self.context.socket(zmq.DEALER)
         resender.connect("tcp://localhost:5560")        
         if task_id in self.started_jobs:
