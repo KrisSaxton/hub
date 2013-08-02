@@ -98,14 +98,10 @@ class Worker():
 #        time.sleep(10)
         self.log.info("Announcing READY")
         data = {'key':'announce', 'data':str(self.id)}
-        self.log.info(json.dumps(data))
         self.return_queue.send(json.dumps(data))
-        self.log.info("MMB")
         #self.jobs.send("READY")
         while True:
             [addr, request] = self.jobs.recv_multipart()
-            self.log.info(addr)
-            self.log.info(request)
             if request == "DISPATCHER_STARTED":
                 # the dispatcher has started we better
                 # remind it who we are...

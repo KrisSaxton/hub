@@ -63,7 +63,6 @@ class Dispatcher():
         self.open_jobs=[]
 
     def _async_timeout(self, task_id):
-        self.log.info("Caretaker Running...")
         dbI=self.db(self.databaseHost,self.databasePort,self.databaseInstance)
         jobid = dbI.getjobid(task_id)
         while jobid in self.open_jobs:
@@ -84,7 +83,7 @@ class Dispatcher():
         self.open_jobs.remove(jobid)
         
     def _startup_clean(self):
-        self.log.info("Caretaker Running...")
+        self.log.info("Cleanup running...")
         dbI=self.db(self.databaseHost,self.databasePort,self.databaseInstance)
         incomplete = dbI.getincompletetasks()
         for task_id in incomplete:
@@ -278,7 +277,7 @@ class Dispatcher():
             self.log.debug('Updating job {0} in DB'.format(
                 job.state.name))
             self._update_job(job)
-            self.log.info('Job {0} completed. Status: {1}, Output: {2}'.format(
+            self.log.info('Job {0} persisted. Status: {1}, Output: {2}'.format(
                           job.state.id, job.state.status, job.state.output))
 #            self.backend.send("None")
         ret = []
@@ -364,16 +363,16 @@ class Dispatcher():
         # Check if task is registered to this dispatcher
         if fromWorker:
             jobid = json.loads(taskrecord)['parent_id']
-            self.log.info(
+            self.log.debug(
             'Received task results for job {0}'.format(
                 jobid))
             jobrecord = self._retreive_job(jobid)
             if jobrecord is None:
-                self.log.warn('No parent job found with id {0}'.format(
+                self.log.warning('No parent job found with id {0}'.format(
                                       jobid))
             else:
                 job = Job().load(jobrecord)
-                self.log.info('Found job in DB: {0}'.format(job.state.id))
+                self.log.debug('Found job in DB: {0}'.format(job.state.id))
                 self.log.info('Task results: {0}'.format(taskrecord))
                 # Turn the taskrecord into a project Task instance
                 updated_task = Task().load(taskrecord)
@@ -392,17 +391,17 @@ class Dispatcher():
             jobrecord = self._retreive_job(jobid)
             if jobrecord is not None:
                 job = Job().load(jobrecord)
-                self.log.info('Found in DB job: {0}'.format(job.state.id))
+                self.log.debug('Found in DB job: {0}'.format(job.state.id))
                 for task in job.state.tasks:
                     if updated_task.state.id == task.state.id:
                         job.update_tasks(updated_task)
                         number_of_updated_tasks += 1
                         started_tasks = self._start_next_task(job)
                 if number_of_updated_tasks == 0:
-                    self.log.warn('Task with id {0} not found in its parent job (possible?)'.format(
+                    self.log.warning('Task with id {0} not found in its parent job (possible?)'.format(
                                   updated_task.state.id))
             else:
-                self.log.warn('No parent job found for Task with id {0}'.format(
+                self.log.warning('No parent job found for Task with id {0}'.format(
                                       updated_task.state.id))
        
         return started_tasks
