@@ -8,7 +8,7 @@ Hub accepts 'jobs' which are comprised of one or more 'tasks'.
 
 Jobs are managed by a subsystem of Hub call the 'dispatcher'.  The dispatcher breaks up the job into its component tasks and hands them off to 'workers'.  Workers handle the task execution and return the associated results to the dispatcher.
 
-Communication between clients and the dispatcher and between the dispatcher and  its workers is implemented using message queues and AMQP.
+Communication between clients and the dispatcher and between the dispatcher and  its workers is implemented using ZeroMQ.
 
 ## Dispatcher
 
@@ -168,7 +168,8 @@ Hub requires the following:
 
  * Python (=>2.5, <3.0): http://python.org/
  * pika (=> 0.9.8): http://pika.readthedocs.org/en/latest/
- * An AMQP-compliant broker (e.g. RabbitMQ, ActiveMQ)
+ * ZeroMQ (=> 3.0.2): http://zeromq.org/
+ * Redis (=> 2.4): http://redis.io/
 
 ### Checkout code
 
