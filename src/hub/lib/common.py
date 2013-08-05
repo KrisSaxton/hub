@@ -258,12 +258,12 @@ class Daemon():
                 print str(err)
                 sys.exit(1)
 
-    def restart(self):
+    def restart(self, *args):
         """
         Restart the daemon
         """
         self.stop()
-        self.start()
+        self.start(*args)
 
     def run(self):
         """

@@ -6,6 +6,8 @@ Command line for Hub client
 import sys
 import fileinput
 from optparse import OptionParser, OptionGroup
+import json
+import pprint
 
 # own modules
 import hub.lib.error as error
@@ -104,7 +106,24 @@ Examples:
             response = client.get(job)
         except Exception, e:
             log.exception(e)
-        log.info(response)
+        print ""
+        try:
+            jobrec = json.loads(response)
+            try:
+                print "Job {0} has completed in: {1}s".format(jobrec['name'],str((jobrec['end_time']-jobrec['start_time'])))
+            except KeyError:
+                pass
+            for task in jobrec['tasks']:
+                try:
+                    print "Task {0} completed in {1}s".format(task['name'],str((task['end_time']-task['start_time'])) )
+                except KeyError:
+                    pass
+            jobrec = json.dumps(jobrec, indent=4)
+        except ValueError:
+            jobrec = response
+        print ""
+        print(jobrec)
+        #log.info(response)
     elif options.update:
         task = ''
         for line in fileinput.input(args):
@@ -127,13 +146,13 @@ Examples:
 
 
 if __name__ == '__main__':
-    try:
-        main()
-    except error.ConfigError, e:
-        sys.stderr.write(e.msg)
-        sys.exit(e.exit_code)
-    except Exception, e:
-        sys.stderr.write(
-            'Sorry, something went wrong, you shouldn\'t be seeing this:'
-            '{0}\n'.format(e))
-        sys.exit(2)
+#    try:
+    main()
+#    except error.ConfigError, e:
+#        sys.exit(e.exit_code)
+##        sys.stderr.write(e.msg)
+#    except Exception, e:
+#            'Sorry, something went wrong, you shouldn\'t be seeing this:'
+##        sys.stderr.write(
+#            '{0}\n'.format(e))
+#        sys.exit(2)

@@ -2,10 +2,10 @@
 This is the Hub client which submits, updates, queries and deletes jobs
 '''
 import sys
-import pika
 import json
 import uuid
 import logging
+import zmq
 import hub.lib.error as error
 
 
@@ -16,50 +16,47 @@ class Client(object):
     def __init__(self, broker):
         self.broker = broker
         self.log = logging.getLogger(__name__)
-        self.conn = pika.BlockingConnection(pika.ConnectionParameters(
-                                            host=self.broker))
-        self.channel = self.conn.channel()
-        result = self.channel.queue_declare(exclusive=True)
-        self.callback_queue = result.method.queue
-        self.channel.basic_consume(self.on_response,
-                                   no_ack=True,
-                                   queue=self.callback_queue)
+        self.context = zmq.Context()
+        self.status = self.context.socket(zmq.REQ)
+        self.status.connect("tcp://{0}:5559".format(broker))
+        self.job_q = self.context.socket(zmq.REQ)
+        self.job_q.connect("tcp://{0}:5560".format(broker))        
 
-    def on_response(self, channel, method, properties, body):
-        if self.corr_id == properties.correlation_id:
-            self.response = body
 
     def _post(self, jobid, request_type, blocking=True, taskdata=None,
               job=None):
         '''
         Send job to messaging system
         '''
-        if request_type is 'create':
-            self.routing_key = 'hub_jobs'
-            self.body = job
-        elif request_type is 'update':
-            self.routing_key = 'hub_results'
-            self.body = taskdata
-        elif request_type is 'get':
-            self.routing_key = 'hub_status'
-            self.body = json.dumps(jobid)
-
         self.response = None
-        if request_type is 'update':
-            self.corr_id = str(jobid)
-        else:
-            self.corr_id = str(uuid.uuid4())
-        _prop = pika.BasicProperties(content_type='application/json',
-                                     reply_to=self.callback_queue,
-                                     correlation_id=self.corr_id)
-        self.channel.basic_publish(exchange='',
-                                   routing_key=self.routing_key,
-                                   properties=_prop,
-                                   body=self.body)
-        if blocking is True:
-            while self.response is None:
-                self.conn.process_data_events()
-        return str(self.response)
+        if request_type is 'create':
+            self.routing_key = 'job'
+            job = json.loads(job)
+            req = {'key':'job', 'data': job}
+            self.body = json.dumps(req)
+            self.job_q.send(self.body)
+            if blocking is True:
+                self.response = self.job_q.recv()
+            return str(self.response)
+        elif request_type is 'update':
+            self.routing_key = 'task_update'
+            taskdata = json.loads(taskdata)
+            req = {'key':'task_update', 'data': taskdata}
+            self.body = json.dumps(req)
+            self.job_q.send(self.body)
+        elif request_type is 'get':
+            self.routing_key = 'status'
+            req = {'key':'status', 'data': {'id': jobid}}
+            self.body = json.dumps(req)
+            self.status.send(self.body)
+
+
+
+#        self.socket.send(self.body)
+        
+            if blocking is True:
+                self.response = self.status.recv()
+            return str(self.response)
 
     def create(self, job):
         '''

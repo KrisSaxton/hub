@@ -4,7 +4,7 @@ Hub job routines
 # Core modules
 import uuid
 import logging
-
+import time
 # Own modules
 import error
 from common import State
@@ -96,6 +96,8 @@ class Job(Task):
         '''
         tasks_to_run = []
         for task in self.state.tasks:
+            if task.state.status in ['SUCCESS', 'FAILED'] and task.state.end_time is None:
+                task.state.end_time = time.time()
             if task.state.status in ['SUCCESS', 'FAILED',
                                      'RUNNING', 'SUBMITTED']:
                 pass
@@ -129,6 +131,7 @@ class Job(Task):
                     task.state.name = t.state.name
                     task.state.parent_id = t.state.parent_id
                     task.state.args = t.state.args
+                    task.state.start_time = t.state.start_time
                 self.state.tasks[i] = task
         return self
 

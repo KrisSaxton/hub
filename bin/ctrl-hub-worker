@@ -76,13 +76,14 @@ Examples:
     broker = conf.get('HUB', 'broker')
     pid_file = conf.get('HUB', 'pid_file')
     tasks_dir = conf.get('HUB', 'tasks_dir')
+    id = conf.get('HUB', 'id')
 
     daemon = WorkerDaemon(pid_file)
     if action == 'start':
         log.info('Starting worker, connecting to broker {0}...'.format(
                   broker))
         try:
-            daemon.start(broker, tasks_dir)
+            daemon.start(broker, tasks_dir, id)
         except Exception, e:
             log.exception(e)
     if action == 'stop':
@@ -91,6 +92,13 @@ Examples:
             daemon.stop()
         except Exception, e:
             log.exception(e)
+    if action == 'restart':
+        log.info('Restarting worker...')
+        try:
+            daemon.restart(broker, tasks_dir, id)
+        except Exception, e:
+            log.exception(e)
+    
                   
 if __name__ == '__main__':
     try:

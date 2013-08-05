@@ -6,6 +6,8 @@ This is the Hub worker which processes tasks on behalf of the dispatcher.
 import os
 import sys
 import logging
+import zmq
+import time
 
 # own modules
 import hub.lib.error as error
@@ -23,21 +25,22 @@ class WorkerDaemon(Daemon):
     '''
     def run(self, *args):
         self.log = logging.getLogger(__name__)
-        (broker, lib_dir) = args
+        (broker, lib_dir, id) = args
         try:
-            Worker(lib_dir).start(broker)
+            Worker(lib_dir, id).start(broker)
         except Exception, e:
-            self.log.exception(e)
+            self.log.error(e)
 
 
 class Worker():
     '''
     Class representing workers that processes tasks.
     '''
-    def __init__(self, tasks_dir):
+    def __init__(self, tasks_dir, id):
         '''Load all worker task plugins, connect to messaging system.'''
         self.log = logging.getLogger(__name__)
         self.modules = self._load_task_modules(tasks_dir)
+        self.id = id
 
     def _load_task_modules(self, tasks_dir):
         self.tasks_dir = tasks_dir
@@ -55,7 +58,7 @@ class Worker():
                 except Exception, e:
                     self.log.warn('Failed to import task {0}'.format(
                         plugin_name))
-                    self.log.exception(e)
+                    self.log.error(e)
         self.log.debug('Active modules {0}'.format(modules))
         # TODO load plugins only as they are called?
         return modules
@@ -65,41 +68,54 @@ class Worker():
         kwargs = {}
         if 'args' in record:
             args = record['args']
+        #reload the module, otherwise we get weird cross-population
+        reload(module)
         task = getattr(module, module.__name__).load(taskrecord)
         self.log.info('Running task: {0}'.format(task.state.name))
+        task.state.status = 'RUNNING'
+        self.post_result(task)
         try:
             task.state.data = task(*args, **kwargs)
-            if task.async:
-                task.state.status = 'RUNNING'
-            else:
-                task.state.status = 'SUCCESS'
         except Exception, e:
             self.log.error('task {0} failed'.format(task.state.name))
-            self.log.execption(e)
+            self.log.error(e)
             task.state.status = 'FAILED'
             task.state.msg = str(e)
         finally:
-            self.post_result(task)
+            if not task.async:
+                task.state.status = 'SUCCESS'
+                self.post_result(task)
 
     def start(self, broker):
         self.broker = broker
-        # Setup connection to broker and declare the work queue
-        try:
-            self.log.info('Starting worker, waiting for tasks...')
-            self.conn = pika.BlockingConnection(pika.ConnectionParameters(
-                                                host=self.broker))
-            self.channel = self.conn.channel()
-            self.channel.queue_declare(queue='hub_tasks')
-            self.channel.basic_consume(self.run,
-                                       queue='hub_tasks', no_ack=True)
-            self.channel.start_consuming()
-        except pika.exceptions.AMQPConnectionError, e:
-            self.log.exception(e)
-            msg = ('Problem connectting to broker {0}'.format(self.broker))
-            self.log.error(msg)
-            raise error.MessagingError(msg, e)
+        self.context = zmq.Context()
+        self.jobs = self.context.socket(zmq.SUB)
+        self.return_queue = self.context.socket(zmq.DEALER)
+        self.jobs.connect("tcp://{0}:5561".format(broker))
+        self.return_queue.connect("tcp://{0}:5560".format(broker))
+        self.jobs.setsockopt(zmq.SUBSCRIBE, self.id)
+        self.jobs.setsockopt(zmq.SUBSCRIBE, "CALL_HOME")
+#        time.sleep(10)
+        self.log.info("Announcing READY")
+        data = {'key':'announce', 'data':str(self.id)}
+        self.return_queue.send(json.dumps(data))
+        #self.jobs.send("READY")
+        while True:
+            [addr, request] = self.jobs.recv_multipart()
+            if request == "DISPATCHER_STARTED":
+                # the dispatcher has started we better
+                # remind it who we are...
+                self.log.info("Dispatcher restarted so announcing READY")
+                data = {'key':'announce', 'data':self.id}
+                self.return_queue.send(json.dumps(data))
+            else:
+                self.run(request)
+                self.log.info("Announcing READY")
+                data = {'key':'announce', 'data':self.id}
+                self.return_queue.send(json.dumps(data))            
+       
 
-    def run(self, ch, method, properties, taskrecord):
+    def run(self, taskrecord):
         '''
         Checks task name for matching module and class,
         instanciates and calls run method with task args
@@ -116,17 +132,10 @@ class Worker():
 
     def post_result(self, task):
         '''Post task results into the results queue.'''
-        conn = pika.BlockingConnection(pika.ConnectionParameters(
-                                       host=self.broker))
-        channel = conn.channel()
-        self.log.debug('Sending task results for job {0} to dispatcher'.format(
-                       task.state.parent_id))
-        channel.basic_publish(exchange='',
-                              routing_key='hub_results',
-                              properties=pika.BasicProperties(
-                              correlation_id=str(task.state.parent_id),
-                              content_type='application/json',),
-                              body=task.save())
+        taskrecord = task.save()
+        data = {'key':'task_result', 'data':json.loads(taskrecord)}
+        res = json.dumps(data)
+        self.return_queue.send(res)
 
 if __name__ == '__main__':
     '''
