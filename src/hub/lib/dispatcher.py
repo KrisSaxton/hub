@@ -121,7 +121,7 @@ class Dispatcher():
         it will resubmit to the queue if the worker hasn't replied.
         '''
         resender = self.context.socket(zmq.DEALER)
-        resender.connect("tcp://localhost:5560")        
+        resender.connect("inproc://router")        
         if task_id in self.started_jobs:
             self.log.warning("Worker {0} didn't respond, resending...".format(worker))
             try:
@@ -149,17 +149,21 @@ class Dispatcher():
         return jobid
 
     def work_q(self):
-        self.context = zmq.Context()
+        self.started_jobs = {}
+        self.workers_addr = []
+#        self.context = zmq.Context()
         self.task_q = self.context.socket(zmq.DEALER)
         self.workers = self.context.socket(zmq.PUB)
         self.workers.bind("tcp://*:5561")
         self.task_q.setsockopt(zmq.IDENTITY, "TASK_Q")
-        self.task_q.connect("tcp://localhost:5560")
+        try:
+            self.task_q.connect("inproc://router")
+        except Exception as e:
+            self.log.info(e)
         
         self.qpoller = zmq.Poller()
         self.qpoller.register(self.task_q, zmq.POLLIN)
-        self.started_jobs = {}
-        self.workers_addr = []
+
         time.sleep(1)
         self.log.debug("Tell the workers to call home...")
         self.workers.send_multipart(['CALL_HOME', 'DISPATCHER_STARTED'])
@@ -195,7 +199,8 @@ class Dispatcher():
         self.job_queue = self.context.socket(zmq.ROUTER)
         self.status.bind("tcp://*:5559")
         self.job_queue.setsockopt(zmq.IDENTITY, "ROUTER")
-        self.job_queue.bind("tcp://*:5560")        
+        self.job_queue.bind("tcp://*:5560")
+        self.job_queue.bind("inproc://router")        
         # Initialize poll set
         self.poller = zmq.Poller()
         self.poller.register(self.status, zmq.POLLIN)
