@@ -29,9 +29,12 @@ class DispatcherDaemon(Daemon):
     '''
     def run(self, *args):
         self.log = logging.getLogger(__name__)
-        broker = args[0]
+        db_type = args[0]
+        db_host = args[1]
+        db_port = args[2]
+        db_instance = args[3]
         try:
-            Dispatcher().start(broker)
+            Dispatcher().start(db_type, db_host, db_port, db_instance)
         except Exception, e:
             self.log.exception(e)
 
@@ -42,25 +45,12 @@ class Dispatcher():
     '''
     def __init__(self):
         '''
-        Setup connection to broker and listen for incoming jobs and results
+        Setup vars
         '''
         self.log = logging.getLogger(__name__)
         self.registered_jobs = {}
-        # Setup config
-        try:
-            self.conf = config.setup('/usr/local/pkg/hub/etc/dispatcher.conf')
-        except error.ConfigError, e:
-            print e.msg
-            raise e
-        self.databaseType = self.conf.get('DATABASE','type')
-        self.databaseHost = self.conf.get('DATABASE','host')
-        self.databasePort = self.conf.get('DATABASE','port')
-        self.databaseInstance = self.conf.get('DATABASE','instance')
-        
-        self.databaseModule = __import__('hub.lib.database',fromlist = [self.databaseType])
-        self.db = getattr(self.databaseModule, self.databaseType)
         self.ct_lock = threading.Lock()
-        self.open_jobs=[]
+        self.open_jobs = []
 
     def _async_timeout(self, task_id):
         '''
@@ -192,8 +182,19 @@ class Dispatcher():
 #                    self.workers+=1
 #                    self.workers_addr.append(addr)
         
-    def start(self, broker):
+    def start(self, db_type, db_host, db_port, db_instance):
+        '''Setup connection to backend DB and message queues.'''
         self.log.info('Starting dispatcher, listening for jobs and results...')
+
+        # Setup DB backend
+        self.databaseType = db_type
+        self.databaseHost = db_host
+        self.databasePort = db_port
+        self.databaseInstance = db_instance
+        self.databaseModule = __import__('hub.lib.database',fromlist = [self.databaseType])
+        self.db = getattr(self.databaseModule, self.databaseType)
+
+        # Setup message queues
         self.context = zmq.Context()
         self.status = self.context.socket(zmq.ROUTER)
         self.job_queue = self.context.socket(zmq.ROUTER)
@@ -427,10 +428,10 @@ class Dispatcher():
 
 if __name__ == '__main__':
     '''
-    Run dispatcher directly by executing this module, passing the broker
-    hostname/IP as the only argument.
+    Run dispatcher directly by executing this module, passing the DB parameters
+    as arguments.
     '''
     try:
-        Dispatcher().start(sys.argv[1])
+        Dispatcher().start(sys.argv[1], sys.argv[2], sys.argv[3])
     except Exception, e:
         print(e)

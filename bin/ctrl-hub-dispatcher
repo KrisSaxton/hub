@@ -47,6 +47,11 @@ Examples:
     # Setup config
     try:
         conf = config.setup(options.config_file)
+        pid_file = conf.get('HUB', 'pid_file')
+        db_type = conf.get('DB', 'db_type', 'HubRedis')
+        db_host = conf.get('DB', 'db_host', 'localhost')
+        db_port = conf.get('DB', 'db_port', 6379)
+        db_instance = conf.get('DB', 'db_instance', 0)
     except error.ConfigError, e:
         print e.msg
         raise e
@@ -73,15 +78,13 @@ Examples:
         parser.error("Script takes exactly one argument")
     action = args[0]
          
-    broker = conf.get('HUB', 'broker')
-    pid_file = conf.get('HUB', 'pid_file')
-
     daemon = DispatcherDaemon(pid_file)
+
     if action == 'start':
-        log.info('Starting dispatcher, connecting to broker {0}...'.format(
-                  broker))
+        log.info('Starting dispatcher, connecting to {0} instance {3} on {1}:{2}...'.format(
+                  db_type, db_host, db_port, db_instance))
         try:
-            daemon.start(broker)
+            daemon.start(db_type, db_host, db_port, db_instance)
         except Exception, e:
             log.exception(e)
     if action == 'stop':
@@ -94,7 +97,7 @@ Examples:
     if action == 'restart':
         log.info('Restarting dispatcher...')
         try:
-            daemon.restart(broker)
+            daemon.restart(db_type, db_host, db_port, db_instance)
         except Exception, e:
             log.exception(e)
                   
